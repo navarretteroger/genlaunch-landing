@@ -323,6 +323,34 @@ test("signup rate limit does not write or grant after the cap", async () => {
   });
 });
 
+test("invalid and honeypot requests do not spend the shared signup allowance", async () => {
+  const parts = stack({
+    env: {
+      GLOBAL_SIGNUP_PER_HOUR: "1",
+      RATE_LIMIT_SIGNUP_PER_MINUTE: "40",
+    },
+  });
+  await withServer(parts, async ({ base }) => {
+    for (let i = 0; i < 8; i += 1) {
+      const bad = await signup(base, { email: "not-an-email", privacyNoticeVersion: "2026-11-06" });
+      assert.equal(bad.status, 400);
+    }
+    const trap = await signup(base, {
+      email: "trap@shop.com",
+      privacyNoticeVersion: "2026-11-06",
+      company_website: "https://spam.example",
+    });
+    assert.equal(trap.status, 400);
+    assert.equal(parts.sheets.calls.append, 0);
+    const first = await signup(base, { email: "one@shop.com", privacyNoticeVersion: "2026-11-06" });
+    assert.equal(first.status, 200);
+    const second = await signup(base, { email: "two@shop.com", privacyNoticeVersion: "2026-11-06" });
+    assert.equal(second.status, 429);
+    assert.equal(second.json.downloadToken, undefined);
+    assert.equal(parts.sheets.rows.length, 1);
+  });
+});
+
 test("honeypot and missing Origin do not reveal whether an email is stored", async () => {
   const parts = stack();
   await withServer(parts, async ({ base }) => {

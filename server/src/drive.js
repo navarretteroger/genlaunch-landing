@@ -3,7 +3,7 @@
 const { Readable } = require("stream");
 const { CodedError } = require("./errors");
 const { OwnerOAuth } = require("./oauth");
-const { googleFetch } = require("./googleFetch");
+const { fetchUntilHeaders, streamWithIdleTimeout } = require("./googleFetch");
 
 function createDriveClient(options) {
   const config = options.config;
@@ -29,11 +29,15 @@ function createDriveClient(options) {
   }
 
   async function requestOnce(token, signal) {
-    return googleFetch(fetchImpl, fileUrl(), {
+    return fetchUntilHeaders(fetchImpl, fileUrl(), {
       method: "GET",
       headers: { Authorization: "Bearer " + token },
       signal,
-    }, config.googleTimeoutMs || 15000);
+    }, {
+      headerTimeoutMs: config.googleTimeoutMs || 8000,
+      timers: config.timers,
+      signal,
+    });
   }
 
   async function openConfiguredPdf(options) {
@@ -81,8 +85,13 @@ function createDriveClient(options) {
     }
     const lengthHeader = res.headers.get("content-length");
     const contentLength = lengthHeader && /^\d+$/.test(lengthHeader) ? Number(lengthHeader) : null;
+    const body = streamWithIdleTimeout(res.body, {
+      idleMs: config.driveBodyIdleMs || 20000,
+      timers: config.timers,
+      signal,
+    });
     return {
-      stream: Readable.fromWeb(res.body),
+      stream: Readable.fromWeb(body),
       contentType: "application/pdf",
       contentLength,
     };

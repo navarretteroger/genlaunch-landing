@@ -99,16 +99,52 @@ function createRateLimiter(options) {
     return { ok: true };
   }
 
+  let inFlight = 0;
+  const maxInFlight = options.maxInFlight || 4;
+
+  function acquire() {
+    if (inFlight >= maxInFlight) return { ok: false, retryAfterSeconds: 2 };
+    inFlight += 1;
+    let released = false;
+    return {
+      ok: true,
+      release() {
+        if (released) return;
+        released = true;
+        inFlight -= 1;
+      },
+    };
+  }
+
+  function prepare(charge) {
+    const slot = acquire();
+    if (!slot.ok) return slot;
+    const quota = charge();
+    if (!quota.ok) {
+      slot.release();
+      return quota;
+    }
+    return { ok: true, release: slot.release };
+  }
+
   return {
-    signup(ip) {
-      const perIp = allow("signup:" + ip, signupPerMinute, 60000);
-      if (!perIp.ok) return perIp;
+    signupRequest(ip) {
+      return allow("signup-request:" + ip, signupPerMinute, 60000);
+    },
+    downloadRequest(ip) {
+      return allow("download-request:" + ip, downloadPerMinute, 60000);
+    },
+    chargeSignupUpstream() {
       return allow("global:signup", globalSignupPerHour, 3600000);
     },
-    download(ip) {
-      const perIp = allow("download:" + ip, downloadPerMinute, 60000);
-      if (!perIp.ok) return perIp;
+    chargeDownloadUpstream() {
       return allow("global:download", globalDownloadPerHour, 3600000);
+    },
+    prepareSignupUpstream() {
+      return prepare(() => allow("global:signup", globalSignupPerHour, 3600000));
+    },
+    prepareDownloadUpstream() {
+      return prepare(() => allow("global:download", globalDownloadPerHour, 3600000));
     },
   };
 }

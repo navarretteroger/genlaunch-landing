@@ -133,6 +133,18 @@ async function performSignup(options) {
         return { status: existing.status, json: existing.response };
       }
 
+      const upstream = options.prepareUpstream ? options.prepareUpstream() : { ok: true, release() {} };
+      if (!upstream.ok) {
+        return {
+          status: 429,
+          json: {
+            ok: false,
+            error: "rate_limited",
+            message: "Too many requests. Wait and try again. Nothing was stored and no download was issued.",
+          },
+        };
+      }
+
       return lock.run("email:" + emailCheck.email, async () => {
         try {
           const found = await options.sheets.findEmail(emailCheck.email);
@@ -167,7 +179,7 @@ async function performSignup(options) {
           storedAtMs: nowMs,
         });
         return { status: 200, json: response };
-      });
+      }).finally(() => upstream.release());
     });
   } catch (err) {
     if (err && err.code === "lock_capacity") {
@@ -202,10 +214,22 @@ async function performDownload(options) {
       },
     };
   }
+  const upstream = options.prepareUpstream ? options.prepareUpstream() : { ok: true, release() {} };
+  if (!upstream.ok) {
+    return {
+      status: 429,
+      json: {
+        ok: false,
+        error: "rate_limited",
+        message: "Too many download requests. Wait and try again. No file was served.",
+      },
+    };
+  }
   try {
     const file = await options.drive.openConfiguredPdf({ signal: options.signal });
-    return { status: 200, file };
+    return { status: 200, file, release: upstream.release };
   } catch (err) {
+    upstream.release();
     const code = err && err.code ? err.code : "drive_unavailable";
     const status = code === "not_configured" ? 503 : 502;
     return {

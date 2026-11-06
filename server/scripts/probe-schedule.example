@@ -1,0 +1,15 @@
+# Example only. The deployment owner copies this onto the host they choose.
+# This repository does not install a scheduler and does not send email, SMS, or chat alerts.
+# Wire a non-zero exit from the probe to the host's existing alerting, if any.
+
+# crontab -e
+# */15 * * * * cd /path/to/genlaunch-landing && /usr/bin/node server/scripts/probe.js >>/var/log/genlaunch-probe.log 2>&1
+
+# systemd timer unit, also not installed by this repo:
+# [Service]
+# Type=oneshot
+# WorkingDirectory=/path/to/genlaunch-landing
+# ExecStart=/usr/bin/node server/scripts/probe.js
+# [Timer]
+# OnUnitActiveSec=15min
+# Persistent=true

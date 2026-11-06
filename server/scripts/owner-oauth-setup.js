@@ -13,6 +13,8 @@ const http = require("http");
 const path = require("path");
 const { OWNER_ACCOUNT } = require("../src/config");
 const { REDIRECT_PORT, REDIRECT_URI, createPkce, buildConsentUrl, assertTokenOutputPath } = require("../src/oauthSetup");
+const { loadConfig } = require("../src/config");
+const { expectedOwnerFiles, evaluateOwnerPicks, renderPickerPage } = require("../src/pickerGrant");
 
 const command = process.argv[2];
 
@@ -36,6 +38,8 @@ function exchange() {
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   if (!clientId) missing("GOOGLE_OAUTH_CLIENT_ID");
   if (!clientSecret) missing("GOOGLE_OAUTH_CLIENT_SECRET");
+  if (!process.env.GOOGLE_PICKER_API_KEY) missing("GOOGLE_PICKER_API_KEY");
+  if (!process.env.GOOGLE_CLOUD_PROJECT_NUMBER) missing("GOOGLE_CLOUD_PROJECT_NUMBER");
   let outputPath;
   try {
     outputPath = assertTokenOutputPath(process.env.OAUTH_REFRESH_TOKEN_OUT);
@@ -46,6 +50,8 @@ function exchange() {
   const loginHint = process.env.OWNER_LOGIN_HINT || OWNER_ACCOUNT;
   warnIfWrongAccount(loginHint);
   const pkce = createPkce();
+  const expectedFiles = expectedOwnerFiles(loadConfig());
+  let granted = null;
   const consentUrl = buildConsentUrl({
     clientId,
     loginHint,
@@ -64,6 +70,47 @@ function exchange() {
       return;
     }
     const url = new URL(req.url, REDIRECT_URI);
+    if (url.pathname === "/picker-session") {
+      if (!granted) {
+        res.statusCode = 404;
+        res.end("{}");
+        return;
+      }
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(JSON.stringify({
+        accessToken: granted.accessToken,
+        apiKey: process.env.GOOGLE_PICKER_API_KEY,
+        appId: process.env.GOOGLE_CLOUD_PROJECT_NUMBER,
+      }));
+      return;
+    }
+    if (url.pathname === "/picked" && req.method === "POST") {
+      const chunks = [];
+      for await (const chunk of req) chunks.push(chunk);
+      let picks = {};
+      try {
+        picks = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch (err) {
+        picks = {};
+      }
+      const verdict = evaluateOwnerPicks(picks, expectedFiles);
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      if (!verdict.ok || !granted) {
+        res.statusCode = 409;
+        res.end(JSON.stringify({ ok: false, error: "picked_files_do_not_match" }));
+        console.error("The picker selection did not match the confirmed signup sheet and guide. No file was shared.");
+        return;
+      }
+      await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+      await fs.promises.writeFile(outputPath, granted.refreshToken + "\n", { mode: 0o600 });
+      granted = null;
+      res.end(JSON.stringify({ ok: true }));
+      console.error("Refresh token written. It was not printed. Move it into the host secret store and delete the file.");
+      server.close();
+      return;
+    }
     if (url.pathname !== "/") {
       res.statusCode = 404;
       res.end("Not found.");
@@ -112,17 +159,15 @@ function exchange() {
         console.error("No refresh token was issued. Re-run consent with prompt=consent. Do not share the PDF or the sheet.");
         process.exitCode = 1;
       } else {
-        await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
-        await fs.promises.writeFile(outputPath, json.refresh_token + "\n", { mode: 0o600 });
-        res.end("<!doctype html><title>OAuth</title><p>You can close this window. The refresh token was written to the file you chose. It was not printed here. Do not commit that file or paste it into GitHub.</p>");
-        console.error("Refresh token written. It was not printed. Move it into the host secret store and delete the file.");
+        granted = { accessToken: json.access_token, refreshToken: json.refresh_token };
+        res.end(renderPickerPage());
+        console.error("Consent received. Pick the confirmed signup spreadsheet, then the canonical guide PDF. The refresh token is not written until those two files are picked.");
       }
     } catch (err) {
       res.statusCode = 502;
       res.end("<!doctype html><title>OAuth</title><p>Token exchange failed. You can close this window.</p>");
       console.error("Token exchange failed.");
       process.exitCode = 1;
-    } finally {
       server.close();
     }
   });

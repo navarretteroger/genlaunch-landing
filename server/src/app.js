@@ -165,7 +165,7 @@ function createApp(options) {
       }
 
       if (req.method === "POST" && url.pathname === "/v1/signups") {
-        const limit = limiter.signup(clientIp(req, config));
+        const limit = limiter.signupRequest(clientIp(req, config));
         if (!limit.ok) {
           statusCode = 429;
           res.setHeader("Retry-After", String(limit.retryAfterSeconds));
@@ -208,6 +208,7 @@ function createApp(options) {
           store,
           lock,
           nowMs: now(),
+          prepareUpstream: () => limiter.prepareSignupUpstream(),
         });
         statusCode = result.status;
         sendJson(res, result.status, result.json);
@@ -215,7 +216,7 @@ function createApp(options) {
       }
 
       if (req.method === "GET" && url.pathname === "/v1/guide") {
-        const limit = limiter.download(clientIp(req, config));
+        const limit = limiter.downloadRequest(clientIp(req, config));
         if (!limit.ok) {
           statusCode = 429;
           res.setHeader("Retry-After", String(limit.retryAfterSeconds));
@@ -240,6 +241,7 @@ function createApp(options) {
           grants,
           nowMs: now(),
           signal: abort.signal,
+          prepareUpstream: () => limiter.prepareDownloadUpstream(),
         });
         if (!result.file) {
           statusCode = result.status;
@@ -259,6 +261,8 @@ function createApp(options) {
         } catch (err) {
           if (result.file.stream && !result.file.stream.destroyed) result.file.stream.destroy();
           if (!res.writableEnded) res.destroy();
+        } finally {
+          if (result.release) result.release();
         }
         return;
       }

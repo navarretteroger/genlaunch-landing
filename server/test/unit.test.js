@@ -21,6 +21,7 @@ const { followUpPolicy, sendFollowUp } = require("../src/followUpPolicy");
 const { buildConsentUrl, REDIRECT_URI } = require("../src/oauthSetup");
 const { OAUTH_SCOPES, OWNER_ACCOUNT } = require("../src/config");
 const { quoteTab } = require("../src/sheets");
+const { evaluateOwnerPicks, renderPickerPage } = require("../src/pickerGrant");
 const { SECRET } = require("../src/testHelpers");
 
 test("spec validation messages match between server and browser helpers", () => {
@@ -184,17 +185,31 @@ test("global signup budget is independent of the caller IP", () => {
     globalDownloadPerHour: 10,
     now: () => now,
   });
-  assert.equal(limiter.signup("203.0.113.1").ok, true);
-  assert.equal(limiter.signup("203.0.113.2").ok, true);
-  assert.equal(limiter.signup("203.0.113.3").ok, false);
+  assert.equal(limiter.chargeSignupUpstream().ok, true);
+  assert.equal(limiter.chargeSignupUpstream().ok, true);
+  assert.equal(limiter.chargeSignupUpstream().ok, false);
+});
+
+test("per-IP request budget does not spend the shared Google signup allowance", () => {
+  const limiter = createRateLimiter({
+    signupPerMinute: 2,
+    downloadPerMinute: 10,
+    globalSignupPerHour: 1,
+    globalDownloadPerHour: 10,
+    now: () => 1_000_000,
+  });
+  assert.equal(limiter.signupRequest("198.51.100.8").ok, true);
+  assert.equal(limiter.signupRequest("198.51.100.8").ok, true);
+  assert.equal(limiter.signupRequest("198.51.100.8").ok, false);
+  assert.equal(limiter.chargeSignupUpstream().ok, true);
 });
 
 test("rate limiter blocks the third call in a minute", () => {
   let now = 1_000_000;
-  const limiter = createRateLimiter({ signupPerMinute: 2, downloadPerMinute: 2, now: () => now });
-  assert.equal(limiter.signup("1.1.1.1").ok, true);
-  assert.equal(limiter.signup("1.1.1.1").ok, true);
-  const blocked = limiter.signup("1.1.1.1");
+  const limiter = createRateLimiter({ signupPerMinute: 2, downloadPerMinute: 2, globalSignupPerHour: 100, globalDownloadPerHour: 100, now: () => now });
+  assert.equal(limiter.signupRequest("1.1.1.1").ok, true);
+  assert.equal(limiter.signupRequest("1.1.1.1").ok, true);
+  const blocked = limiter.signupRequest("1.1.1.1");
   assert.equal(blocked.ok, false);
   assert.ok(blocked.retryAfterSeconds >= 1);
 });
@@ -216,7 +231,7 @@ test("file idempotency store keeps the token off the email", async () => {
   assert.equal((await memory.get("k")).response.downloadToken, "t");
 });
 
-test("owner consent URL requests Sheets and Drive read on the existing account", () => {
+test("owner consent URL requests only drive.file for files the owner picks", () => {
   const pkce = createPkce();
   const url = new URL(buildConsentUrl({
     clientId: "test-client-id",
@@ -238,10 +253,24 @@ test("owner consent URL requests Sheets and Drive read on the existing account",
   assert.equal(setupScript.includes("console.log(json"), false);
   assert.throws(() => assertTokenOutputPath("/workspace/secret.txt", "/workspace"), /token_output_inside_repo/);
   const scope = url.searchParams.get("scope");
-  OAUTH_SCOPES.forEach((item) => assert.ok(scope.includes(item)));
+  assert.deepEqual(OAUTH_SCOPES, ["https://www.googleapis.com/auth/drive.file"]);
+  assert.equal(scope, "https://www.googleapis.com/auth/drive.file");
+  assert.equal(scope.includes("drive.readonly"), false);
+  assert.equal(scope.includes("spreadsheets"), false);
   assert.equal(scope.includes("gmail"), false);
-  assert.equal(scope.includes("drive.file"), false);
   assert.equal(url.toString().includes("service_account"), false);
+});
+
+test("picker authorization matches only the confirmed sheet and pdf", () => {
+  const expected = { spreadsheetId: "sheet-id", pdfFileId: "pdf-id" };
+  assert.equal(evaluateOwnerPicks({ spreadsheetId: "sheet-id", pdfFileId: "pdf-id" }, expected).ok, true);
+  assert.equal(evaluateOwnerPicks({ spreadsheetId: "other", pdfFileId: "pdf-id" }, expected).ok, false);
+  const html = renderPickerPage();
+  assert.match(html, /setAppId\(session.appId\)/);
+  assert.match(html, /application\/vnd\.google-apps\.spreadsheet/);
+  assert.match(html, /application\/pdf/);
+  assert.equal(html.includes("client_secret"), false);
+  assert.equal(html.includes("refresh_token"), false);
 });
 
 test("sheet tab quoting preserves the em dash", () => {

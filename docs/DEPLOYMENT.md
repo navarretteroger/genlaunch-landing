@@ -40,7 +40,7 @@ The API host is separate from GitHub Pages. Pages cannot hold the OAuth refresh 
 
 The Google principal is the **existing** account `navarretteroger@gmail.com`, the same account Roger verified as owner of both files. One refresh token carries both scopes. The server never creates a Google account, never creates a service account, and never calls the Drive permissions API.
 
-There is no single-file OAuth scope for an existing file this app did not create. `drive.readonly` can read Drive files that account can already read. The process only requests the configured file id. Treat the refresh token as a high-value secret.
+The OAuth scope is `https://www.googleapis.com/auth/drive.file` only. Google lists that scope as the non-sensitive way to see and edit the specific Drive files used with the app, including spreadsheets ([Sheets API scopes](https://developers.google.com/workspace/sheets/api/scopes), [Drive API scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)). During setup the owner picks the existing signup spreadsheet and the existing guide PDF in Google Picker. Picker authorizes this app for those picked files. It does not change the files' sharing settings, does not share them with another account, and does not use a service account. The server still requests only the configured file ids. If those files were not picked, Drive and Sheets fail closed.
 
 `drive.file` cannot see this PDF without a share or an interactive picker. Sharing the PDF is out of scope and is not a fallback.
 
@@ -89,7 +89,7 @@ Frontend links are relative (`css/styles.css`, `thank-you.html`) so they work un
 - A valid token can be used more than once until it expires. Anyone who has the token can download until then. It is not proof of inbox ownership.
 - Drive `401`/`403`, a redirect, or a non-PDF body: `502`, generic message, no `Location` header, no file id in the JSON.
 
-Browser `Origin`, when present, must be allowlisted. A missing `Origin` is not treated as the Pages site. CORS does not authenticate the caller, does not stop a script from posting, and does not stop someone who has a bearer token from using it. Per-IP limits default to 8 signups and 20 downloads per minute. A separate global cap defaults to 30 signups and 60 downloads per hour so one forged address cannot spend the whole Sheets quota.
+Browser `Origin`, when present, must be allowlisted. A missing `Origin` is not treated as the Pages site. CORS does not authenticate the caller, does not stop a script from posting, and does not stop someone who has a bearer token from using it. Per-IP limits default to 8 signup requests and 20 download requests per minute. Those count every request, including invalid email and the honeypot, and they do not spend the shared Google allowance. The shared allowance defaults to 30 upstream signups and 60 upstream downloads per hour, plus 4 in-flight Google calls. It is charged only after the email, honeypot, and download-token checks pass. Invalid junk cannot empty that hourly allowance. Someone who posts valid-looking emails can still use it up to the cap. There is no CAPTCHA. That remaining abuse is bounded by the hourly cap and the in-flight cap, not removed.
 
 `TRUST_PROXY=true` without `TRUSTED_PROXY_CIDRS` refuses to start. When the immediate socket address is not in that list, `X-Forwarded-For` is ignored. When the peer is trusted, the client address is the first entry from the right that is not itself in the trusted list. A chain of only trusted hops uses the socket address. The leftmost header value is not used.
 
@@ -114,16 +114,13 @@ Spec §7.2 optional prices and any waitlist or booking URL are omitted.
 Do these on a machine the owner controls. Use the host’s secret store. Do not commit the results.
 
 1. **OAuth client, same Google account.** In Google Cloud, signed in as `navarretteroger@gmail.com`, create a project if needed. A Cloud project is not a new Google account and is not a service account. Enable the Google Sheets API and the Google Drive API. Do not enable billing for this task unless that account already has it.
-2. **Scopes, and the accepted risk.** There is no OAuth scope for one existing spreadsheet or one existing Drive file that this app did not create. The scopes this server requests are:
-   - `https://www.googleapis.com/auth/spreadsheets` — sensitive. It can edit every spreadsheet the owner can edit. Required to append a row. `spreadsheets.readonly` cannot append.
-   - `https://www.googleapis.com/auth/drive.readonly` — restricted. It can view and download every Drive file the owner can already open ([Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)).
-   `drive.file` is narrower, but it only covers files the app created or the user picked, which would grant the app a file-level permission. This project does not use it, because the PDF and the sheet stay owner-only with no permission change. The process only calls the configured spreadsheet id and file id. That limit is in this code, not in the Google token. Do not add a Gmail scope. Do not create a service account.
-3. **Publishing status.** Checked against Google’s public docs on 6 Nov 2026:
-   - A consent screen whose publishing status is **Testing**, for an external user type, gets refresh tokens that expire in 7 days, unless the only scopes are profile scopes ([refresh token expiration](https://developers.google.com/identity/protocols/oauth2#expiration)). These Sheets and Drive scopes are not profile scopes. Testing mode is not a durable production setup.
+2. **Scope.** Request only `https://www.googleapis.com/auth/drive.file`. Enable the Google Sheets API, Drive API, and Picker API on the project. Create a browser API key for Picker and put it in `GOOGLE_PICKER_API_KEY`. Put the Cloud project number in `GOOGLE_CLOUD_PROJECT_NUMBER`. Do not commit either value. Do not add `drive.readonly`, `spreadsheets`, or a Gmail scope. Do not create a service account.
+3. **Publishing status.** Checked against Google’s public docs on 6 Nov 2026. `drive.file` is non-sensitive, unlike `drive.readonly`. The 7-day Testing-token rule still applies when the publishing status is Testing:
+   - A consent screen whose publishing status is **Testing**, for an external user type, gets refresh tokens that expire in 7 days, unless the only scopes are profile scopes ([refresh token expiration](https://developers.google.com/identity/protocols/oauth2#expiration)). `drive.file` is not a profile scope. Testing mode is not a durable production setup.
    - Setting publishing status to **In production** is what Google’s expiration page ties to removing that 7-day Testing limit. It does not by itself verify the app.
-   - `drive.readonly` is restricted and `spreadsheets` is sensitive. Until those scopes are verified, Google shows the unverified-app screen. Unverified apps that show that screen are capped at 100 new users over the life of the project ([Unverified apps](https://support.google.com/cloud/answer/7454865)). That cap is not a way to skip verification, and this runbook does not claim it is. Google’s restricted-scope page also says a personal-use app can still hit the unverified warning, the user cap, and a limited refresh-token lifetime while it remains a test configuration ([restricted scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification)).
+   - Because this app requests `drive.file` rather than a restricted Drive scope, it does not take the restricted-scope security assessment that `drive.readonly` would require. Publishing status and the unverified-app rules still depend on what is configured in the Cloud console. The 100-new-user cap is not a way to skip verification ([Unverified apps](https://support.google.com/cloud/answer/7454865)).
    - Refresh tokens also stop working if revoked, unused for six months, or if the account passes 100 live refresh tokens for that client id ([same expiration section](https://developers.google.com/identity/protocols/oauth2#expiration)).
-   - This repository does not change the consent screen and does not submit verification. If a long-lived token requires verification or Google’s restricted-scope security assessment because the server transmits Drive file bytes, that submission is a separate decision. Do not share the PDF or the sheet instead.
+   - This repository does not change the consent screen and does not submit verification. Do not share the PDF or the sheet, and do not switch back to `drive.readonly` to avoid the Picker step.
 4. **Desktop OAuth client and consent.** Create an OAuth client of type Desktop under the same account. Register redirect URI `http://127.0.0.1:53682/`. The helper uses PKCE S256, a `state` value checked on the loopback response, and listens only on `127.0.0.1`. It writes the refresh token to `OAUTH_REFRESH_TOKEN_OUT` with mode `0600` and does not print the token or the authorization code. The path must be absolute and outside this repo.
 
    ```bash
@@ -133,7 +130,7 @@ Do these on a machine the owner controls. Use the host’s secret store. Do not 
    node server/scripts/owner-oauth-setup.js exchange
    ```
 
-   Consent as `navarretteroger@gmail.com`. Move the file into the host secret store and delete it. If a different account is selected, delete the file. This repo will not grant that account access. If `GOOGLE_APPLICATION_CREDENTIALS` is set, the process ignores it.
+   Consent as `navarretteroger@gmail.com`. The page then opens Google Picker. Pick the confirmed signup spreadsheet, then the canonical guide PDF. The refresh token file is written only after those two ids match. Picker does not change either file's sharing settings. Move the token file into the host secret store and delete it. If a different account is selected, delete the file. This repo will not grant that account access. If `GOOGLE_APPLICATION_CREDENTIALS` is set, the process ignores it. The Picker page is local to this setup command. It is not deployed on GitHub Pages.
 
 5. **Grant signing secret.** On the host:
 
@@ -155,7 +152,7 @@ Do these on a machine the owner controls. Use the host’s secret store. Do not 
    node server/scripts/probe.js
    ```
 
-   That refreshes the owner token and reads the sheet tab and header row. It prints `googleAuth` and `sheets` as `ok` or `fail`, and `pdfDownload: "not_run"`. It does not print tokens or email addresses.
+   That refreshes the owner token and reads the sheet tab and header row. It prints `googleAuth` and `sheets` as `ok` or `fail`, and `pdfDownload: "not_run"`. It does not print tokens or email addresses. A non-zero exit is the signal a scheduler can watch. `server/scripts/probe-schedule.example` shows a crontab and a systemd timer the owner can copy onto the host they choose. This repo does not install that schedule and does not send email or chat alerts.
 
 7. **Proxy logs.** Configure the proxy not to record query strings or `Authorization` headers. The app itself logs only method, path, and status. Set `TRUSTED_PROXY_CIDRS` to the immediate proxy addresses before `TRUST_PROXY=true`.
 

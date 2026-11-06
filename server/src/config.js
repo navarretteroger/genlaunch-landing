@@ -22,9 +22,9 @@ const REQUIRED_HEADERS = Object.freeze([
   "marketing_opt_in",
 ]);
 
+/** Per-file access. The owner must pick the spreadsheet and the PDF with Google Picker. */
 const OAUTH_SCOPES = Object.freeze([
-  "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.readonly",
+  "https://www.googleapis.com/auth/drive.file",
 ]);
 
 function loadConfig(env) {
