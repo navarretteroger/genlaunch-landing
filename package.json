@@ -1,0 +1,13 @@
+{
+  "name": "genlaunch-landing",
+  "private": true,
+  "description": "Customer Recovery landing page and owner-OAuth capture/download API. Static files are served by GitHub Pages. The API is a separate Node process.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server/src/index.js",
+    "test": "node --test server/test/*.test.js",
+    "oauth-url": "node server/scripts/owner-oauth-setup.js url"
+  }
+}

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Thank you — Customer Recovery guide</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body data-delivery-mode="preview">
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div class="preview-banner top-banner" role="status" data-preview-only>
+    Preview mode — no capture, no download
+  </div>
+
+  <header class="site-header">
+    <p class="eyebrow">Free guide for independent generator service shops</p>
+  </header>
+
+  <main id="main">
+    <section aria-labelledby="ty-preview-title" id="preview-thank-you" data-testid="preview-thank-you">
+      <div class="thank-you-panel">
+        <h1 id="ty-preview-title">Preview complete — delivery not enabled yet</h1>
+        <p class="lead">Thanks for testing the form. In preview mode we do <strong>not</strong> collect your email and we do <strong>not</strong> fulfill a PDF download. Production needs a real backend, privacy notice, and a controlled website download that keeps Drive masters private.</p>
+        <p>Built files for review belong in the Landing Page Handoff folder—not a public launch.</p>
+        <p><a class="btn btn-secondary" href="index.html">Back to landing page</a></p>
+      </div>
+    </section>
+
+    <section aria-labelledby="ty-ready-title" id="production-thank-you" data-testid="production-thank-you" hidden>
+      <div class="thank-you-panel">
+        <h1 id="ty-ready-title">Your Customer Recovery guide is ready</h1>
+        <p class="lead">Download the guide now and save a copy for your shop. This page does <strong>not</strong> email the PDF.</p>
+        <p id="duplicate-note" hidden>This email was already on the signup sheet. A new download token was issued for this tab. No second row was added.</p>
+        <button type="button" class="btn btn-primary" id="download-btn" data-testid="download-btn">
+          Download the Customer Recovery guide (PDF)
+        </button>
+        <p class="download-note" id="download-note">
+          The download uses a short-lived bearer token kept in this browser tab. A download token works for anyone who has it until it expires. It is not a link to the private Drive file. Saving an email address does not prove you control that inbox.
+        </p>
+        <aside class="soft-prompt" aria-labelledby="soft-prompt-title" data-testid="soft-prompt">
+          <h2 id="soft-prompt-title">Want help putting this into practice? Choose guided setup or done-for-you implementation.</h2>
+          <p>This form does not sign you up for a paid service.</p>
+          <p>No payment form, no “Buy now,” and no booking or waitlist link is offered here.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section aria-labelledby="ty-inactive-title" id="grant-inactive" data-testid="grant-inactive" hidden>
+      <div class="thank-you-panel">
+        <h1 id="ty-inactive-title">No download is active in this browser</h1>
+        <p class="lead" id="inactive-detail">This page does not email the PDF and does not keep a public copy. A download appears here after the server stores a signup and returns a short-lived token to this tab.</p>
+        <p><a class="btn btn-secondary" href="index.html">Back to the guide form</a></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Independent generator service resources · © Roger Navarrette</p>
+    <p>Privacy details must be approved and linked before production collection is enabled.</p>
+    <p><a href="privacy.html">Privacy notice</a></p>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/validators.js"></script>
+  <script src="js/thank-you.js"></script>
+</body>
+</html>
