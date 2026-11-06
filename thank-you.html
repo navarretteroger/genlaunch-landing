@@ -22,8 +22,7 @@
     <section aria-labelledby="ty-preview-title" id="preview-thank-you" data-testid="preview-thank-you">
       <div class="thank-you-panel">
         <h1 id="ty-preview-title">Preview complete — delivery not enabled yet</h1>
-        <p class="lead">Thanks for testing the form. In preview mode we do <strong>not</strong> collect your email and we do <strong>not</strong> fulfill a PDF download. Production needs a real backend, privacy notice, and a controlled website download that keeps Drive masters private.</p>
-        <p>Built files for review belong in the Landing Page Handoff folder—not a public launch.</p>
+        <p class="lead">Thanks for testing the form. In preview mode we do <strong>not</strong> collect your email and we do <strong>not</strong> fulfill a PDF download. Production needs a configured backend, a verified deletion contact, and a controlled website download that keeps the Drive file owner-only.</p>
         <p><a class="btn btn-secondary" href="index.html">Back to landing page</a></p>
       </div>
     </section>
@@ -32,13 +31,13 @@
       <div class="thank-you-panel">
         <h1 id="ty-ready-title">Your Customer Recovery guide is ready</h1>
         <p class="lead">Download the guide now and save a copy for your shop. This page does <strong>not</strong> email the PDF.</p>
-        <p id="duplicate-note" hidden>This email was already on the signup sheet. A new download token was issued for this tab. No second row was added.</p>
         <button type="button" class="btn btn-primary" id="download-btn" data-testid="download-btn">
           Download the Customer Recovery guide (PDF)
         </button>
         <p class="download-note" id="download-note">
-          The download uses a short-lived bearer token kept in this browser tab. A download token works for anyone who has it until it expires. It is not a link to the private Drive file. Saving an email address does not prove you control that inbox.
+          This download token lasts 15 minutes. Anyone who has it can download the guide until it expires. It does not prove you control the inbox. It is not a link to the private Drive file. The guide is not emailed.
         </p>
+        <p class="download-note" id="expiry-note"></p>
         <aside class="soft-prompt" aria-labelledby="soft-prompt-title" data-testid="soft-prompt">
           <h2 id="soft-prompt-title">Want help putting this into practice? Choose guided setup or done-for-you implementation.</h2>
           <p>This form does not sign you up for a paid service.</p>

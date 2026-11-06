@@ -1,7 +1,8 @@
 "use strict";
 
 const http = require("http");
-const { loadConfig, captureConfigured } = require("./config");
+const { pipeline } = require("stream/promises");
+const { loadConfig, captureConfigured, secretsPresent, deletionContactConfigured } = require("./config");
 const { createGrantCodec } = require("./grants");
 const { createSheetsClient } = require("./sheets");
 const { createDriveClient } = require("./drive");
@@ -72,6 +73,8 @@ function createApp(options) {
     createRateLimiter({
       signupPerMinute: config.rateLimitSignupPerMinute,
       downloadPerMinute: config.rateLimitDownloadPerMinute,
+      globalSignupPerHour: config.globalSignupPerHour,
+      globalDownloadPerHour: config.globalDownloadPerHour,
       now,
     });
   const lock = settings.lock || new KeyLock();
@@ -148,7 +151,12 @@ function createApp(options) {
           ok: true,
           service: "genlaunch-landing-api",
           authorizationMode: "owner-oauth",
-          captureConfigured: captureConfigured(config),
+          configPresent: secretsPresent(config),
+          deletionContactConfigured: deletionContactConfigured(config),
+          durableIdempotency: Boolean(store && store.durable),
+          captureConfigured: captureConfigured(config) && Boolean(store && store.durable),
+          googleAuth: "unknown",
+          sheets: "unknown",
           outboundSending: followUpPolicy.outboundSending,
           followUp: followUpPolicy.status,
           privacyNoticeVersion: config.privacyNoticeVersion,
@@ -157,7 +165,7 @@ function createApp(options) {
       }
 
       if (req.method === "POST" && url.pathname === "/v1/signups") {
-        const limit = limiter.signup(clientIp(req, config.trustProxy));
+        const limit = limiter.signup(clientIp(req, config));
         if (!limit.ok) {
           statusCode = 429;
           res.setHeader("Retry-After", String(limit.retryAfterSeconds));
@@ -207,7 +215,7 @@ function createApp(options) {
       }
 
       if (req.method === "GET" && url.pathname === "/v1/guide") {
-        const limit = limiter.download(clientIp(req, config.trustProxy));
+        const limit = limiter.download(clientIp(req, config));
         if (!limit.ok) {
           statusCode = 429;
           res.setHeader("Retry-After", String(limit.retryAfterSeconds));
@@ -221,12 +229,17 @@ function createApp(options) {
         const header = req.headers.authorization || "";
         const match = /^Bearer\s+(\S+)\s*$/i.exec(header);
         const token = match ? match[1] : "";
+        const abort = new AbortController();
+        res.on("close", () => {
+          if (!res.writableEnded) abort.abort();
+        });
         const result = await performDownload({
           token,
           config,
           drive,
           grants,
           nowMs: now(),
+          signal: abort.signal,
         });
         if (!result.file) {
           statusCode = result.status;
@@ -241,10 +254,12 @@ function createApp(options) {
         });
         if (result.file.contentLength != null) headers["Content-Length"] = String(result.file.contentLength);
         res.writeHead(200, headers);
-        result.file.stream.on("error", () => {
-          res.destroy();
-        });
-        result.file.stream.pipe(res);
+        try {
+          await pipeline(result.file.stream, res);
+        } catch (err) {
+          if (result.file.stream && !result.file.stream.destroyed) result.file.stream.destroy();
+          if (!res.writableEnded) res.destroy();
+        }
         return;
       }
 

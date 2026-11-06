@@ -3,13 +3,16 @@
 
 /**
  * Local owner-consent helper. Run on a machine the PDF owner controls.
- * Reads client id/secret from the environment, never from argv.
- * Prints a refresh token to stdout only. Does not write a token file.
+ * Reads the client id and secret from the environment, never from argv.
+ * Writes the refresh token to OAUTH_REFRESH_TOKEN_OUT (mode 0600) outside this repo.
+ * Does not print the token, the authorization code, or the client secret.
  * Does not change Drive or Sheet permissions.
  */
+const fs = require("fs");
 const http = require("http");
+const path = require("path");
 const { OWNER_ACCOUNT } = require("../src/config");
-const { REDIRECT_URI, buildConsentUrl } = require("../src/oauthSetup");
+const { REDIRECT_PORT, REDIRECT_URI, createPkce, buildConsentUrl, assertTokenOutputPath } = require("../src/oauthSetup");
 
 const command = process.argv[2];
 
@@ -21,23 +24,11 @@ function missing(name) {
 function warnIfWrongAccount(loginHint) {
   if (loginHint !== OWNER_ACCOUNT) {
     console.error(
-      "Warning: PDF and signup sheet are owner-only on " +
+      "Warning: the PDF and signup sheet are owner-only on " +
         OWNER_ACCOUNT +
-        ". This project will not grant another account access. Consent with a different account will fail closed."
+        ". This project will not grant another account access."
     );
   }
-}
-
-async function printUrl() {
-  const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  if (!clientId) missing("GOOGLE_OAUTH_CLIENT_ID");
-  const loginHint = process.env.OWNER_LOGIN_HINT || OWNER_ACCOUNT;
-  warnIfWrongAccount(loginHint);
-  const url = buildConsentUrl({ clientId, loginHint });
-  console.log(url);
-  console.error("Register this redirect URI on the Desktop OAuth client if required: " + REDIRECT_URI);
-  console.error("Consent as " + OWNER_ACCOUNT + ". Do not create a service account. Do not share the PDF or the sheet.");
-  console.error("Then run: node server/scripts/owner-oauth-setup.js exchange");
 }
 
 function exchange() {
@@ -45,32 +36,58 @@ function exchange() {
   const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
   if (!clientId) missing("GOOGLE_OAUTH_CLIENT_ID");
   if (!clientSecret) missing("GOOGLE_OAUTH_CLIENT_SECRET");
+  let outputPath;
+  try {
+    outputPath = assertTokenOutputPath(process.env.OAUTH_REFRESH_TOKEN_OUT);
+  } catch (err) {
+    console.error("Set OAUTH_REFRESH_TOKEN_OUT to an absolute path outside this repository.");
+    process.exit(2);
+  }
   const loginHint = process.env.OWNER_LOGIN_HINT || OWNER_ACCOUNT;
   warnIfWrongAccount(loginHint);
-  console.error("Listening on " + REDIRECT_URI + " — open the consent URL if you have not already.");
-  console.error(buildConsentUrl({ clientId, loginHint }));
+  const pkce = createPkce();
+  const consentUrl = buildConsentUrl({
+    clientId,
+    loginHint,
+    codeChallenge: pkce.challenge,
+    state: pkce.state,
+  });
+  console.error("Listening on " + REDIRECT_URI);
+  console.error("Open this URL and consent as " + OWNER_ACCOUNT + ".");
+  console.error("Do not create a service account. Do not share the PDF or the sheet.");
+  console.error(consentUrl);
 
   const server = http.createServer(async (req, res) => {
+    if (req.socket.remoteAddress !== "127.0.0.1" && req.socket.remoteAddress !== "::ffff:127.0.0.1") {
+      res.statusCode = 403;
+      res.end("Forbidden.");
+      return;
+    }
     const url = new URL(req.url, REDIRECT_URI);
     if (url.pathname !== "/") {
       res.statusCode = 404;
       res.end("Not found.");
       return;
     }
-    const oauthError = url.searchParams.get("error");
-    const code = url.searchParams.get("code");
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     res.setHeader("Cache-Control", "no-store");
+    res.setHeader("Referrer-Policy", "no-referrer");
+    const oauthError = url.searchParams.get("error");
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
     if (oauthError) {
       res.end("<!doctype html><title>OAuth</title><p>Authorization was not completed. You can close this window.</p>");
-      console.error("Authorization was not completed: " + oauthError);
+      console.error("Authorization was not completed.");
       server.close();
       process.exitCode = 1;
       return;
     }
-    if (!code) {
+    if (!code || state !== pkce.state) {
       res.statusCode = 400;
-      res.end("Missing code.");
+      res.end("<!doctype html><title>OAuth</title><p>The authorization response did not match this session.</p>");
+      console.error("Authorization response did not match this session.");
+      server.close();
+      process.exitCode = 1;
       return;
     }
     try {
@@ -83,19 +100,22 @@ function exchange() {
           client_secret: clientSecret,
           redirect_uri: REDIRECT_URI,
           grant_type: "authorization_code",
+          code_verifier: pkce.verifier,
         }).toString(),
         redirect: "manual",
+        signal: AbortSignal.timeout(8000),
       });
       const json = await tokenRes.json();
-      res.end(
-        "<!doctype html><title>OAuth</title><p>You can close this window. If a refresh token was issued, it was printed only in the terminal that started this script. Do not paste it into GitHub, email, or the landing-page repository.</p>"
-      );
       if (!json || !json.refresh_token) {
-        console.error("No refresh_token was returned. Re-run with prompt=consent while the OAuth app is in Testing. Do not share the PDF or the sheet to work around this.");
+        res.statusCode = 502;
+        res.end("<!doctype html><title>OAuth</title><p>No refresh token was issued. You can close this window.</p>");
+        console.error("No refresh token was issued. Re-run consent with prompt=consent. Do not share the PDF or the sheet.");
         process.exitCode = 1;
       } else {
-        process.stdout.write("GOOGLE_OAUTH_REFRESH_TOKEN=" + json.refresh_token + "\n");
-        console.error("Store that refresh token in the host secret manager only. Do not commit it.");
+        await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
+        await fs.promises.writeFile(outputPath, json.refresh_token + "\n", { mode: 0o600 });
+        res.end("<!doctype html><title>OAuth</title><p>You can close this window. The refresh token was written to the file you chose. It was not printed here. Do not commit that file or paste it into GitHub.</p>");
+        console.error("Refresh token written. It was not printed. Move it into the host secret store and delete the file.");
       }
     } catch (err) {
       res.statusCode = 502;
@@ -107,7 +127,7 @@ function exchange() {
     }
   });
 
-  server.listen(53682, "127.0.0.1", () => {
+  server.listen(REDIRECT_PORT, "127.0.0.1", () => {
     setTimeout(() => {
       console.error("Timed out waiting for the OAuth redirect.");
       server.close();
@@ -116,12 +136,10 @@ function exchange() {
   });
 }
 
-if (command === "url") {
-  printUrl();
-} else if (command === "exchange") {
+if (command === "exchange") {
   exchange();
 } else {
-  console.error("Usage: node server/scripts/owner-oauth-setup.js url|exchange");
-  console.error("Put GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in the environment, not in argv.");
+  console.error("Usage: node server/scripts/owner-oauth-setup.js exchange");
+  console.error("Set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, and OAUTH_REFRESH_TOKEN_OUT in the environment, not in argv.");
   process.exit(2);
 }

@@ -8,7 +8,7 @@
   var inactive = document.getElementById("grant-inactive");
   var downloadBtn = document.getElementById("download-btn");
   var note = document.getElementById("download-note");
-  var duplicateNote = document.getElementById("duplicate-note");
+  var expiryNote = document.getElementById("expiry-note");
 
   function show(el) { if (el) el.hidden = false; }
   function hide(el) { if (el) el.hidden = true; }
@@ -38,8 +38,8 @@
     show(production);
     hidePreviewChrome();
     document.body.setAttribute("data-delivery-mode", "production");
-    if (duplicateNote) {
-      duplicateNote.hidden = session.duplicate !== true;
+    if (expiryNote && session.downloadExpiresAt) {
+      expiryNote.textContent = "This token expires at " + session.downloadExpiresAt + ".";
     }
     if (!downloadBtn) return;
     downloadBtn.disabled = false;

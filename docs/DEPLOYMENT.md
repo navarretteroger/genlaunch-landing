@@ -76,9 +76,10 @@ Frontend links are relative (`css/styles.css`, `thank-you.html`) so they work un
 - Bad email: `400`, spec §6.4 message, no sheet write, no token.
 - Same key and same email while the token has more than five seconds of life: the same JSON, including the same token, and no second row.
 - Same key and a different email: `409`, no second row.
-- Same email and a new key: no second row, a new token, `duplicate: true`.
-- Sheet or OAuth failure: `503`, spec save-failed message, **no token**.
-- Missing OAuth or signing secret: `503` with the preview sentence. Nothing is stored.
+- Same email and a new key: no second row, a new token. The HTTP status and the public JSON keys match a first-time signup. The body does not include `duplicate` or `signupId`.
+- A non-empty `company_website` field is a honeypot. It is rejected and not written. This is not a CAPTCHA service.
+- Sheet or OAuth failure: `503`, spec save-failed message, **no token**. An append that may have landed is reconciled by `signup_id` before any second write. A `401` retries the append only after that lookup misses.
+- Missing OAuth, signing secret, deletion contact, or durable idempotency storage: `503` with the preview sentence. Nothing is stored.
 
 `GET /v1/guide` with `Authorization: Bearer <token>`.
 
@@ -88,52 +89,51 @@ Frontend links are relative (`css/styles.css`, `thank-you.html`) so they work un
 - A valid token can be used more than once until it expires. Anyone who has the token can download until then. It is not proof of inbox ownership.
 - Drive `401`/`403`, a redirect, or a non-PDF body: `502`, generic message, no `Location` header, no file id in the JSON.
 
-Browser `Origin` must be allowlisted when the header is present. CORS is not authentication. A public form can be posted by any client that can reach the API. Per-IP rate limits are the abuse control (`8` signups and `20` downloads per minute by default). `TRUST_PROXY=true` only if the platform overwrites `X-Forwarded-For`.
+Browser `Origin`, when present, must be allowlisted. A missing `Origin` is not treated as the Pages site. CORS does not authenticate the caller, does not stop a script from posting, and does not stop someone who has a bearer token from using it. Per-IP limits default to 8 signups and 20 downloads per minute. A separate global cap defaults to 30 signups and 60 downloads per hour so one forged address cannot spend the whole Sheets quota.
 
-Idempotency records live in `server/data/idempotency.json` (mode `0600`, gitignored). They store the token and a hash, not the email. The disk is local to the process. Use one instance. On ephemeral disk, a retry after restart still dedupes by email in the sheet but will mint a new token.
+`TRUST_PROXY=true` without `TRUSTED_PROXY_CIDRS` refuses to start. When the immediate socket address is not in that list, `X-Forwarded-For` is ignored. When the peer is trusted, the client address is the first entry from the right that is not itself in the trusted list. A chain of only trusted hops uses the socket address. The leftmost header value is not used.
+
+Idempotency records live in `server/data/idempotency.json` (mode `0600`, gitignored, capped, 48-hour TTL). They store the token and a hash, not the email. If that directory cannot be created, the process exits. It does not fall back to memory. `IDEMPOTENCY_STORE=memory` starts, but signups stay unavailable because the store is not durable. Use one instance. A restart can mint a new token for the same idempotency key; the sheet still dedupes the email.
 
 Formula injection: every appended cell is passed through `valueInputOption=RAW`, and values that start with `=`, `+`, `-`, `@`, tab, or CR are prefixed with an apostrophe.
 
-## Privacy and follow-up
+## Privacy
 
-The notice on the page and on `privacy.html` is what the server implements:
+The preview text is what visitors see while `DELIVERY_MODE` is `preview`. The production paragraphs stay hidden until `CAPTURE_API_BASE` and `SUPPORT_CONTACT` are both set. There is no marketing checkbox. `marketing_opt_in` is the text `false`. That is not consent to messages. This process does not send email. That project rule is the whole outbound policy here; it is not a claim about email law in every jurisdiction.
 
-- Stored fields are the six sheet columns. Email is the only field the visitor types.
-- Purpose is guide access (the thank-you download). The PDF is not emailed.
-- Spec §6.5 (one message, five business days after a verified open, not triggered by submit or download) is **documented and not running**. Open tracking does not exist. `server/src/followUpPolicy.js` throws if something calls `sendFollowUp`.
-- `OUTBOUND_SENDING=on` in the environment does not turn sending on.
-- No tracking pixels, no mail provider, no recipient telemetry.
-- No automatic deletion job. Rows stay until the owner deletes them. That is not a certification.
-- No support address is published. Set one on the page only after a verified address exists; do not invent one. `SUPPORT_CONTACT` is unused by the static page on purpose.
+Spec §6.5 is not shown on the page. `server/src/followUpPolicy.js` throws if something calls `sendFollowUp`.
 
-Spec §7.2 optional prices and any waitlist or booking URL are omitted. The soft prompt is the spec sentence plus “this form does not sign you up for a paid service.”
+No automatic deletion job exists. The owner can delete a row by hand. That is not a retention guarantee. Google stores the sheet, GitHub Pages stores the static site, and the API host can keep its own connection logs. This process logs method, path, and status.
 
-Spec §6.3’s production sentence that describes the follow-up as something that will be sent is not used as a promise. The production helper still points at the notice, and the notice says the policy is not running. That follows the later instruction: no consent is collected, and absent consent does not authorize outbound mail.
+A verified deletion contact is a launch blocker. Leave `SUPPORT_CONTACT` empty and `js/config.js` `SUPPORT_CONTACT` null until a real address is chosen. The page does not invent one. When both are set later, they should be the same address, and the production notice prints it.
+
+Spec §7.2 optional prices and any waitlist or booking URL are omitted.
 
 ## Remaining inputs (parent / operator)
 
 Do these on a machine the owner controls. Use the host’s secret store. Do not commit the results.
 
 1. **OAuth client, same Google account.** In Google Cloud, signed in as `navarretteroger@gmail.com`, create a project if needed. A Cloud project is not a new Google account and is not a service account. Enable the Google Sheets API and the Google Drive API. Do not enable billing for this task unless that account already has it.
-2. **Consent screen.** External, stay in **Testing**. Add only `navarretteroger@gmail.com` as a test user. Scopes, and no others:
-   - `https://www.googleapis.com/auth/spreadsheets`
-   - `https://www.googleapis.com/auth/drive.readonly`
-   Do not add a Gmail send scope.
-3. **Desktop OAuth client.** Create an OAuth client of type Desktop. If it asks for a redirect URI, register `http://127.0.0.1:53682/`. Do not create a service account. Do not download a service-account JSON for this app. If `GOOGLE_APPLICATION_CREDENTIALS` is set on the host, the process ignores it and logs a warning.
-4. **Refresh token.** On the owner’s computer:
+2. **Scopes, and the accepted risk.** There is no OAuth scope for one existing spreadsheet or one existing Drive file that this app did not create. The scopes this server requests are:
+   - `https://www.googleapis.com/auth/spreadsheets` — sensitive. It can edit every spreadsheet the owner can edit. Required to append a row. `spreadsheets.readonly` cannot append.
+   - `https://www.googleapis.com/auth/drive.readonly` — restricted. It can view and download every Drive file the owner can already open ([Drive scopes](https://developers.google.com/workspace/drive/api/guides/api-specific-auth)).
+   `drive.file` is narrower, but it only covers files the app created or the user picked, which would grant the app a file-level permission. This project does not use it, because the PDF and the sheet stay owner-only with no permission change. The process only calls the configured spreadsheet id and file id. That limit is in this code, not in the Google token. Do not add a Gmail scope. Do not create a service account.
+3. **Publishing status.** Checked against Google’s public docs on 6 Nov 2026:
+   - A consent screen whose publishing status is **Testing**, for an external user type, gets refresh tokens that expire in 7 days, unless the only scopes are profile scopes ([refresh token expiration](https://developers.google.com/identity/protocols/oauth2#expiration)). These Sheets and Drive scopes are not profile scopes. Testing mode is not a durable production setup.
+   - Setting publishing status to **In production** is what Google’s expiration page ties to removing that 7-day Testing limit. It does not by itself verify the app.
+   - `drive.readonly` is restricted and `spreadsheets` is sensitive. Until those scopes are verified, Google shows the unverified-app screen. Unverified apps that show that screen are capped at 100 new users over the life of the project ([Unverified apps](https://support.google.com/cloud/answer/7454865)). That cap is not a way to skip verification, and this runbook does not claim it is. Google’s restricted-scope page also says a personal-use app can still hit the unverified warning, the user cap, and a limited refresh-token lifetime while it remains a test configuration ([restricted scope verification](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification)).
+   - Refresh tokens also stop working if revoked, unused for six months, or if the account passes 100 live refresh tokens for that client id ([same expiration section](https://developers.google.com/identity/protocols/oauth2#expiration)).
+   - This repository does not change the consent screen and does not submit verification. If a long-lived token requires verification or Google’s restricted-scope security assessment because the server transmits Drive file bytes, that submission is a separate decision. Do not share the PDF or the sheet instead.
+4. **Desktop OAuth client and consent.** Create an OAuth client of type Desktop under the same account. Register redirect URI `http://127.0.0.1:53682/`. The helper uses PKCE S256, a `state` value checked on the loopback response, and listens only on `127.0.0.1`. It writes the refresh token to `OAUTH_REFRESH_TOKEN_OUT` with mode `0600` and does not print the token or the authorization code. The path must be absolute and outside this repo.
 
    ```bash
-   export GOOGLE_OAUTH_CLIENT_ID="..."        # environment, not argv
-   export GOOGLE_OAUTH_CLIENT_SECRET="..."    # environment, not argv
-   node server/scripts/owner-oauth-setup.js url
+   export GOOGLE_OAUTH_CLIENT_ID="..."
+   export GOOGLE_OAUTH_CLIENT_SECRET="..."
+   export OAUTH_REFRESH_TOKEN_OUT="/absolute/path/outside/the/repo/refresh-token"
    node server/scripts/owner-oauth-setup.js exchange
    ```
 
-   Sign in as `navarretteroger@gmail.com` when Google asks. The script prints `GOOGLE_OAUTH_REFRESH_TOKEN=...` to that terminal only. Put it in the host secret store and clear the scrollback. Do not paste it into GitHub.
-
-   While the consent screen stays in Testing, Google expires refresh tokens after **7 days**. Re-run the exchange when the API starts returning `capture`/`sheet` authorization errors. Do not “fix” expiry by sharing the PDF or the sheet with another user or a service account. This project does not submit the app for restricted-scope verification.
-
-   If a different Google account is selected at consent, discard the token. The files will not be readable, and this repo will not grant that account access.
+   Consent as `navarretteroger@gmail.com`. Move the file into the host secret store and delete it. If a different account is selected, delete the file. This repo will not grant that account access. If `GOOGLE_APPLICATION_CREDENTIALS` is set, the process ignores it.
 
 5. **Grant signing secret.** On the host:
 
@@ -149,19 +149,26 @@ Do these on a machine the owner controls. Use the host’s secret store. Do not 
    curl -sS https://<api-host>/healthz
    ```
 
-   `captureConfigured` must be `true` before the page is switched. `false` means a name listed at startup under `missing` is still empty. `/healthz` does not print secret values or file ids.
+   `/healthz` reports `configPresent`, `deletionContactConfigured`, `durableIdempotency`, and `captureConfigured` separately from `googleAuth` and `sheets`, which stay `unknown` on this endpoint. It does not download the PDF and does not print secrets or rows. Before calling the page ready, run:
 
-7. **Proxy logs.** Configure the proxy not to record query strings or `Authorization` headers. The app itself logs only method, path, and status.
+   ```bash
+   node server/scripts/probe.js
+   ```
 
-8. **Turn the page on, in a later reviewed change.** Only after step 6 is actually true:
+   That refreshes the owner token and reads the sheet tab and header row. It prints `googleAuth` and `sheets` as `ok` or `fail`, and `pdfDownload: "not_run"`. It does not print tokens or email addresses.
+
+7. **Proxy logs.** Configure the proxy not to record query strings or `Authorization` headers. The app itself logs only method, path, and status. Set `TRUSTED_PROXY_CIDRS` to the immediate proxy addresses before `TRUST_PROXY=true`.
+
+8. **Turn the page on, in a later reviewed change.** Only after health shows config, contact, and durable storage, and `probe.js` shows `googleAuth` and `sheets` ok:
    - Set `DELIVERY_MODE` to `"production"`.
-   - Set `CAPTURE_API_BASE` to the API origin, no trailing secret, for example `https://api.example.com`.
+   - Set `CAPTURE_API_BASE` to the API origin, for example `https://api.example.com`.
+   - Set `SUPPORT_CONTACT` in `js/config.js` to the same verified address as the server.
    - Remove the `noindex` meta tags if the page should be indexed.
    - Keep prices, checkout, Stripe, and Skool out.
 
-   Roger’s approval to leave preview is still required. This branch does not flip that switch.
+   This branch does not flip that switch.
 
-9. **Optional.** A verified support or deletion address, if one should be published. Leave it unpublished until then.
+9. **Verified deletion contact.** Required before capture. Do not publish a placeholder.
 
 No further sheet id is required unless the sheet is replaced. No Drive folder should be created. Do not upload this tree into Drive as part of this change; the pull request is the review copy. Do not modify Acquisition research, the Deliverables folder `1n6ExJP_masWpcUws9g0HTTe2PiZ_f38N`, or the Landing Page Handoff folder.
 

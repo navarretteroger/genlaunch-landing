@@ -31,7 +31,7 @@ npm test
 npm start
 ```
 
-`npm start` listens on port 8080 and reports `captureConfigured: false` until the host has the owner OAuth refresh token and `GRANT_SIGNING_SECRET`. `POST /v1/signups` then returns the preview message and does not issue a download token.
+`npm start` listens on port 8080. Until the host has the owner refresh token, `GRANT_SIGNING_SECRET`, a verified deletion contact, and a writable idempotency directory, `POST /v1/signups` returns the preview message and does not issue a download token. `/healthz` does not treat saved config as proof that Google accepted the token. Run `node server/scripts/probe.js` for that check. It does not download the PDF.
 
 ## Layout
 

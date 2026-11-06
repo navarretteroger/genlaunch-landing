@@ -88,7 +88,7 @@
           Preview mode — no capture, no download
         </div>
         <p class="lead" id="form-helper-preview" data-preview-only>Enter your work email. In <strong>preview</strong> mode nothing is stored and no PDF download is fulfilled. Production (when enabled) validates and saves your email, then shows a thank-you page with an <strong>immediate download</strong> from the website—not an emailed PDF and not a public Drive link.</p>
-        <p class="lead" id="form-helper-production" hidden>Enter your work email to get the guide. After you submit, you’ll go to a thank-you page with an immediate download. See the notice under the form about the optional one follow-up email.</p>
+        <p class="lead" id="form-helper-production" data-production-only hidden>Enter your work email to get the guide. After you submit, you’ll go to a thank-you page with an immediate download from this website. The PDF is not emailed.</p>
 
         <form id="guide-form" method="post" action="#get-guide" novalidate data-testid="guide-form">
           <div class="field">
@@ -105,6 +105,10 @@
               data-testid="email-input"
             />
             <p class="field-error" id="email-error" role="alert" data-testid="email-error"></p>
+          </div>
+          <div class="hp-field" aria-hidden="true">
+            <label for="company-website">Company website</label>
+            <input id="company-website" name="company_website" type="text" tabindex="-1" autocomplete="off" value="" />
           </div>
 
           <button type="submit" class="btn btn-primary" data-cta="primary" data-testid="submit-btn">
@@ -124,15 +128,17 @@
 
     <section class="privacy-notice" id="privacy" aria-labelledby="privacy-title">
       <h2 id="privacy-title">Privacy notice</h2>
-      <p data-preview-only>Preview mode: this form does not store your email and does not provide a real PDF download. Production stays off until a real backend, privacy notice, and controlled website download exist.</p>
-      <p>When production capture is on, the server stores the email address you submit. It also stores a signup id, the UTC time, the source label genlaunch-landing, privacy notice version 2026-11-06, and marketing_opt_in set to false.</p>
-      <p>The purpose of storing the email is guide access. After a successful save, the thank-you page can offer a short-lived download from this website. The PDF is not emailed.</p>
-      <p>This form does not ask for marketing or program-follow-up consent. marketing_opt_in is stored as false. That false value is not consent to program follow-up.</p>
-      <p>At most one later message, five business days after a verified email open, is a documented policy that is not running. This site does not send email and does not track email opens. Outbound sending is off. Submitting the form does not enroll you in a paid service.</p>
-      <p>Saving an email address does not prove you control that inbox. The check in the browser is only a format check. The server issues a download token only after it stores the signup.</p>
-      <p>A download token works for anyone who has it until it expires. It is not a link to the private Drive file.</p>
-      <p>The signup sheet is separate from campaign prospect lists. No automatic deletion period is configured. A row remains until the owner deletes it. This is not a certification.</p>
-      <p>A support or deletion email address is not published on this page.</p>
+      <p data-preview-only>Preview mode: this form does not store your email and does not provide a real PDF download. Production stays off until a real backend, a verified deletion contact, and a controlled website download exist.</p>
+      <p data-preview-only>A verified deletion contact is not published on this page. Capture stays off until the owner configures one. This page does not invent an address.</p>
+      <div data-production-only hidden>
+        <p>When production capture is on, the server stores the email address you submit. It also stores a signup id, the UTC time, the source label genlaunch-landing, privacy notice version 2026-11-06, and marketing_opt_in set to false.</p>
+        <p>The purpose of storing the email is guide access. This form does not ask for a marketing choice. marketing_opt_in is stored as false. That false value is not consent to messages.</p>
+        <p>This system does not send email and does not track email opens. Outbound sending is off. Saving an email address does not prove you control that inbox. The check in the browser is only a format check.</p>
+        <p>A download token works for anyone who has it until it expires. The default lifetime is 15 minutes. It is not a link to the private Drive file. The guide is not emailed.</p>
+        <p>The signup row is stored in a private Google Sheet in the site owner’s Google account. This page is hosted on GitHub Pages. The capture API runs on a host the owner chooses. Those providers can keep their own connection logs. This API is written to log the HTTP method, path, and status, not the email address or the download token.</p>
+        <p>The signup sheet is separate from campaign prospect lists. No automatic deletion period is configured. The owner can delete a row by hand. This is not a retention guarantee or a certification.</p>
+        <p>To ask for deletion, write to <span data-support-contact></span>.</p>
+      </div>
       <p>No tracking pixels are on this page.</p>
       <p><a href="privacy.html">Privacy notice page</a></p>
     </section>
@@ -150,6 +156,7 @@
 
   <script src="js/config.js"></script>
   <script src="js/validators.js"></script>
+  <script src="js/mode.js"></script>
   <script src="js/main.js"></script>
 </body>
 </html>

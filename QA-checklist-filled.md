@@ -23,7 +23,7 @@ Legend: `[x]` covered in this branch · `[~]` partial · `[ ]` not done · `[n/a
 - [x] §6.4 messages in client helpers and server validation, locked by tests
 - [x] Preview: no persistence, no download, preview sentence on submit
 - [~] Production path validate → persist → redirect is implemented and covered with a mock sheet. It does not run in the shipped page, and it has not been executed against the live sheet
-- [~] Privacy notice is on the page and on `privacy.html`. It does not promise the §6.5 follow-up, because outbound is off and no consent is collected. A support address is intentionally unpublished
+- [~] Privacy notice matches preview until production config and a verified deletion contact exist. It does not collect a marketing opt-in. Outbound sending stays off. No contact address is invented
 - [x] In-flight double submit, retry idempotency key, and server duplicate email are tested
 - [x] Production mode on the page requires `DELIVERY_MODE=production` and `CAPTURE_API_BASE`. Both are unset
 

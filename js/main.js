@@ -89,6 +89,7 @@
         body: JSON.stringify({
           email: String(emailInput.value || "").trim(),
           privacyNoticeVersion: config.PRIVACY_NOTICE_VERSION,
+          company_website: (document.getElementById("company-website") || {}).value || "",
         }),
       }).then(function (res) {
         return res.json().catch(function () { return {}; }).then(function (body) {

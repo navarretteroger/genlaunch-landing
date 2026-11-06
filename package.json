@@ -8,6 +8,6 @@
   "scripts": {
     "start": "node server/src/index.js",
     "test": "node --test server/test/*.test.js",
-    "oauth-url": "node server/scripts/owner-oauth-setup.js url"
+    "oauth-exchange": "node server/scripts/owner-oauth-setup.js exchange"
   }
 }

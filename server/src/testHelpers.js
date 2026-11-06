@@ -17,9 +17,12 @@ function configuredEnv(over) {
       GOOGLE_OAUTH_CLIENT_SECRET: "test-client-secret",
       GOOGLE_OAUTH_REFRESH_TOKEN: "test-refresh-token",
       GRANT_SIGNING_SECRET: SECRET,
+      SUPPORT_CONTACT: "deletion-contact-test-fixture@example.com",
       ALLOWED_ORIGINS: "https://navarretteroger.github.io",
       RATE_LIMIT_SIGNUP_PER_MINUTE: "40",
       RATE_LIMIT_DOWNLOAD_PER_MINUTE: "40",
+      GLOBAL_SIGNUP_PER_HOUR: "1000",
+      GLOBAL_DOWNLOAD_PER_HOUR: "1000",
       IDEMPOTENCY_STORE: "memory",
     },
     over || {}
@@ -46,11 +49,16 @@ function createMockSheets() {
       const found = rows.find((row) => row.email === email);
       return found ? { signupId: found.signup_id, email: found.email } : null;
     },
+    async findSignupId(signupId) {
+      const found = rows.find((row) => row.signup_id === signupId);
+      return found ? { signupId: found.signup_id } : null;
+    },
+    invalidateAuth() {},
     async append(row) {
       calls.append += 1;
       if (failAppend) {
         const err = new Error("sheet_unavailable");
-        err.code = "sheet_unavailable";
+        err.code = failAppend === "unauthorized" ? "sheet_unauthorized" : "sheet_unavailable";
         throw err;
       }
       rows.push(Object.assign({}, row));

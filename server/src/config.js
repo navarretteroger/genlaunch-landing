@@ -40,6 +40,10 @@ function loadConfig(env) {
     host: source.HOST || "0.0.0.0",
     port: Number(source.PORT || 8080),
     trustProxy: source.TRUST_PROXY === "true",
+    trustedProxyCidrs: String(source.TRUSTED_PROXY_CIDRS || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean),
     allowedOrigins,
     pagesOrigin: PAGES_ORIGIN,
     ownerAccount: OWNER_ACCOUNT,
@@ -61,6 +65,9 @@ function loadConfig(env) {
       source.IDEMPOTENCY_PATH || path.join(__dirname, "..", "data", "idempotency.json"),
     rateLimitSignupPerMinute: Number(source.RATE_LIMIT_SIGNUP_PER_MINUTE || 8),
     rateLimitDownloadPerMinute: Number(source.RATE_LIMIT_DOWNLOAD_PER_MINUTE || 20),
+    globalSignupPerHour: Number(source.GLOBAL_SIGNUP_PER_HOUR || 30),
+    globalDownloadPerHour: Number(source.GLOBAL_DOWNLOAD_PER_HOUR || 60),
+    googleTimeoutMs: Number(source.GOOGLE_TIMEOUT_MS || 8000),
     requiredHeaders: REQUIRED_HEADERS,
     oauthScopes: OAUTH_SCOPES,
     outboundSending: "off",
@@ -76,8 +83,24 @@ function missingSecretNames(config) {
   return missing;
 }
 
-function captureConfigured(config) {
+function secretsPresent(config) {
   return missingSecretNames(config).length === 0 && Boolean(config.sheetId && config.sheetTab && config.driveFileId);
+}
+
+function deletionContactConfigured(config) {
+  return typeof config.supportContact === "string" && config.supportContact.trim().length > 0;
+}
+
+function captureConfigured(config) {
+  return secretsPresent(config) && deletionContactConfigured(config);
+}
+
+function assertRuntimeConfig(config) {
+  if (config.trustProxy && config.trustedProxyCidrs.length === 0) {
+    const err = new Error("trusted_proxy_misconfigured");
+    err.code = "trusted_proxy_misconfigured";
+    throw err;
+  }
 }
 
 module.exports = {
@@ -93,5 +116,8 @@ module.exports = {
   OAUTH_SCOPES,
   loadConfig,
   missingSecretNames,
+  secretsPresent,
+  deletionContactConfigured,
   captureConfigured,
+  assertRuntimeConfig,
 };

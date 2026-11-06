@@ -13,6 +13,9 @@ const { createGrantCodec } = require("../src/grants");
 const { loadConfig, captureConfigured, missingSecretNames, SHEET_TAB_DEFAULT, SHEET_ID_DEFAULT, SHEET_GID_DEFAULT, DRIVE_FILE_ID_DEFAULT, REQUIRED_HEADERS } = require("../src/config");
 const { summarizeRequest, hasSensitiveQuery } = require("../src/redact");
 const { clientIp, createRateLimiter } = require("../src/rateLimit");
+const { assertRuntimeConfig } = require("../src/config");
+const { createPkce, assertTokenOutputPath } = require("../src/oauthSetup");
+const { openIdempotencyStore } = require("../src/idempotency");
 const { MemoryIdempotencyStore, FileIdempotencyStore } = require("../src/idempotency");
 const { followUpPolicy, sendFollowUp } = require("../src/followUpPolicy");
 const { buildConsentUrl, REDIRECT_URI } = require("../src/oauthSetup");
@@ -39,6 +42,13 @@ test("valid, empty, and invalid email", () => {
   assert.equal(validateEmail("a@b").message, messages.INVALID_EMAIL);
   assert.equal(validateEmail("a b@shop.com").message, messages.INVALID_EMAIL);
   assert.equal(validateEmail("a@shop.com\n").message, messages.INVALID_EMAIL);
+  ["\"you\"@shop.com", "Owner <you@shop.com>", "you@shop.com,other@shop.com", "you@shop.com;bcc@shop.com", "you\\@shop.com"].forEach((sample) => {
+    assert.equal(validateEmail(sample).ok, false, sample);
+    assert.equal(clientValidators.isValidEmail(sample), false, sample);
+  });
+  assert.equal(validateEmail("you@münchen.de").ok, true);
+  assert.equal(clientValidators.isValidEmail("you@münchen.de"), true);
+  assert.equal(validateEmail("you+tag@yourshop.com").email, "you+tag@yourshop.com");
   const fields = clientValidators.validateCaptureFields({ email: "" });
   assert.equal(fields.errors.email, messages.EMPTY_EMAIL);
   const bad = clientValidators.validateCaptureFields({ email: "nope" });
@@ -133,10 +143,50 @@ test("request logs keep the path and drop the query", () => {
   assert.equal(hasSensitiveQuery("/healthz"), false);
 });
 
-test("client IP trusts X-Forwarded-For only when configured", () => {
-  const req = { headers: { "x-forwarded-for": "203.0.113.5, 10.0.0.1" }, socket: { remoteAddress: "127.0.0.1" } };
-  assert.equal(clientIp(req, false), "127.0.0.1");
-  assert.equal(clientIp(req, true), "203.0.113.5");
+test("forwarded client IP ignores forged leftmost values unless the peer is trusted", () => {
+  const direct = {
+    headers: { "x-forwarded-for": "1.2.3.4, 203.0.113.5" },
+    socket: { remoteAddress: "198.51.100.10" },
+  };
+  assert.equal(clientIp(direct, { trustProxy: false, trustedProxyCidrs: ["10.0.0.0/8"] }), "198.51.100.10");
+  assert.equal(clientIp(direct, { trustProxy: true, trustedProxyCidrs: [] }), "198.51.100.10");
+  assert.equal(clientIp(direct, { trustProxy: true, trustedProxyCidrs: ["10.0.0.0/8"] }), "198.51.100.10");
+  const proxied = {
+    headers: { "x-forwarded-for": "1.1.1.1, 203.0.113.9" },
+    socket: { remoteAddress: "::ffff:10.0.0.5" },
+  };
+  assert.equal(clientIp(proxied, { trustProxy: true, trustedProxyCidrs: ["10.0.0.0/8"] }), "203.0.113.9");
+  const onlyTrustedHops = {
+    headers: { "x-forwarded-for": "10.0.0.8, 10.0.0.5" },
+    socket: { remoteAddress: "10.0.0.5" },
+  };
+  assert.equal(clientIp(onlyTrustedHops, { trustProxy: true, trustedProxyCidrs: ["10.0.0.0/8"] }), "10.0.0.5");
+  assert.throws(() => assertRuntimeConfig({ trustProxy: true, trustedProxyCidrs: [] }), /trusted_proxy_misconfigured/);
+});
+
+test("non-durable idempotency is explicit and a bad data directory does not fall back", async () => {
+  const memory = await openIdempotencyStore({ idempotencyMode: "memory" });
+  assert.equal(memory.durable, false);
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "genlaunch-notdir-"));
+  const blocker = path.join(dir, "not-a-directory");
+  fs.writeFileSync(blocker, "x");
+  await assert.rejects(
+    () => openIdempotencyStore({ idempotencyMode: "file", idempotencyPath: path.join(blocker, "idem.json") })
+  );
+});
+
+test("global signup budget is independent of the caller IP", () => {
+  let now = 1_000_000;
+  const limiter = createRateLimiter({
+    signupPerMinute: 10,
+    downloadPerMinute: 10,
+    globalSignupPerHour: 2,
+    globalDownloadPerHour: 10,
+    now: () => now,
+  });
+  assert.equal(limiter.signup("203.0.113.1").ok, true);
+  assert.equal(limiter.signup("203.0.113.2").ok, true);
+  assert.equal(limiter.signup("203.0.113.3").ok, false);
 });
 
 test("rate limiter blocks the third call in a minute", () => {
@@ -167,13 +217,26 @@ test("file idempotency store keeps the token off the email", async () => {
 });
 
 test("owner consent URL requests Sheets and Drive read on the existing account", () => {
-  const url = new URL(buildConsentUrl({ clientId: "test-client-id" }));
+  const pkce = createPkce();
+  const url = new URL(buildConsentUrl({
+    clientId: "test-client-id",
+    codeChallenge: pkce.challenge,
+    state: pkce.state,
+  }));
   assert.equal(url.origin + url.pathname, "https://accounts.google.com/o/oauth2/v2/auth");
   assert.equal(url.searchParams.get("login_hint"), OWNER_ACCOUNT);
   assert.equal(url.searchParams.get("redirect_uri"), REDIRECT_URI);
   assert.equal(url.searchParams.get("access_type"), "offline");
   assert.equal(url.searchParams.get("prompt"), "consent");
   assert.equal(url.searchParams.get("include_granted_scopes"), "false");
+  assert.equal(url.searchParams.get("code_challenge_method"), "S256");
+  assert.equal(url.searchParams.get("code_challenge"), pkce.challenge);
+  assert.equal(url.searchParams.get("state"), pkce.state);
+  assert.throws(() => buildConsentUrl({ clientId: "test-client-id" }), /pkce_required/);
+  const setupScript = fs.readFileSync(path.join(__dirname, "../scripts/owner-oauth-setup.js"), "utf8");
+  assert.equal(setupScript.includes("GOOGLE_OAUTH_REFRESH_TOKEN="), false);
+  assert.equal(setupScript.includes("console.log(json"), false);
+  assert.throws(() => assertTokenOutputPath("/workspace/secret.txt", "/workspace"), /token_output_inside_repo/);
   const scope = url.searchParams.get("scope");
   OAUTH_SCOPES.forEach((item) => assert.ok(scope.includes(item)));
   assert.equal(scope.includes("gmail"), false);
@@ -212,23 +275,31 @@ test("frontend protocol refuses success without a token and omits email from ses
   const record = clientValidators.buildSessionRecord("https://api.example", {
     downloadToken: "tok",
     downloadExpiresAt: "2099-01-01T00:00:00.000Z",
-    duplicate: false,
+    duplicate: true,
     signupId: "id",
     email: "person@shop.com",
     privacyNoticeVersion: "2026-11-06",
   });
   assert.equal(Object.prototype.hasOwnProperty.call(record, "email"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record, "duplicate"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(record, "signupId"), false);
   assert.equal(record.downloadToken, "tok");
   const preview = clientValidators.canActivateDownload({ DELIVERY_MODE: "preview", CAPTURE_API_BASE: "https://api.example" }, record, Date.now());
   assert.equal(preview.ok, false);
+  const noContact = clientValidators.canActivateDownload(
+    { DELIVERY_MODE: "production", CAPTURE_API_BASE: "https://api.example", SUPPORT_CONTACT: null },
+    record,
+    Date.parse("2098-01-01T00:00:00.000Z")
+  );
+  assert.equal(noContact.ok, false);
   const ready = clientValidators.canActivateDownload(
-    { DELIVERY_MODE: "production", CAPTURE_API_BASE: "https://api.example" },
+    { DELIVERY_MODE: "production", CAPTURE_API_BASE: "https://api.example", SUPPORT_CONTACT: "deletion-contact-test-fixture@example.com" },
     record,
     Date.parse("2098-01-01T00:00:00.000Z")
   );
   assert.equal(ready.ok, true);
   const expired = clientValidators.canActivateDownload(
-    { DELIVERY_MODE: "production", CAPTURE_API_BASE: "https://api.example" },
+    { DELIVERY_MODE: "production", CAPTURE_API_BASE: "https://api.example", SUPPORT_CONTACT: "deletion-contact-test-fixture@example.com" },
     record,
     Date.parse("2100-01-01T00:00:00.000Z")
   );

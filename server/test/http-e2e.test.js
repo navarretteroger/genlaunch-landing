@@ -21,7 +21,7 @@ function stack(over) {
   const config = loadConfig(configuredEnv(over && over.env));
   const sheets = createMockSheets();
   const drive = createMockDrive(over && over.pdf);
-  const store = new MemoryIdempotencyStore();
+  const store = new MemoryIdempotencyStore({ durable: over && over.durable === false ? false : true });
   const grants = codec(config.grantSecret, over && over.ttl ? over.ttl : config.grantTtlSeconds);
   return { config, sheets, drive, store, grants, now: over && over.now };
 }
@@ -47,10 +47,12 @@ test("end-to-end mock: persist, idempotent retry, duplicate email, then download
     const key = idempotencyKey();
     const body = { email: " You@YourShop.com ", privacyNoticeVersion: "2026-11-06", source: "=evil", phone: "555" };
     const first = await signup(base, body, key);
-    assert.equal(first.status, 201);
+    assert.equal(first.status, 200);
     assert.equal(first.json.ok, true);
-    assert.equal(first.json.duplicate, false);
+    assert.equal(first.json.duplicate, undefined);
+    assert.equal(first.json.signupId, undefined);
     assert.equal(first.json.marketingOptIn, false);
+    assert.equal(first.json.downloadTtlSeconds, 900);
     assert.equal(first.json.outboundSending, "off");
     assert.equal(typeof first.json.downloadToken, "string");
     assert.equal(first.headers.get("access-control-allow-origin"), "https://navarretteroger.github.io");
@@ -69,14 +71,23 @@ test("end-to-end mock: persist, idempotent retry, duplicate email, then download
     assert.equal(JSON.stringify(parts.sheets.rows).includes("555"), false);
 
     const retry = await signup(base, { email: "you@yourshop.com", privacyNoticeVersion: "2026-11-06" }, key);
-    assert.equal(retry.status, 201);
+    assert.equal(retry.status, 200);
     assert.equal(retry.json.downloadToken, first.json.downloadToken);
     assert.equal(parts.sheets.calls.append, 1);
 
     const again = await signup(base, { email: "you@yourshop.com", privacyNoticeVersion: "2026-11-06" }, idempotencyKey());
     assert.equal(again.status, 200);
-    assert.equal(again.json.duplicate, true);
+    assert.equal(again.json.duplicate, undefined);
+    assert.equal(again.json.signupId, undefined);
     assert.notEqual(again.json.downloadToken, first.json.downloadToken);
+    const shape = (json) => {
+      const copy = Object.assign({}, json);
+      delete copy.downloadToken;
+      delete copy.downloadExpiresAt;
+      return copy;
+    };
+    assert.deepEqual(shape(first.json), shape(again.json));
+    assert.deepEqual(Object.keys(first.json).sort(), Object.keys(again.json).sort());
     assert.equal(parts.sheets.rows.length, 1);
 
     const download = await fetch(base + "/v1/guide", {
@@ -179,7 +190,7 @@ test("expired and tampered grants and unauthorized Drive do not serve the file",
   const parts = stack({ now: () => nowMs, ttl: 60 });
   await withServer(parts, async ({ base }) => {
     const ok = await signup(base, { email: "a@shop.com", privacyNoticeVersion: "2026-11-06" });
-    assert.equal(ok.status, 201);
+    assert.equal(ok.status, 200);
     const token = ok.json.downloadToken;
 
     nowMs += 61 * 1000;
@@ -265,7 +276,7 @@ test("same idempotency key with a different email conflicts", async () => {
   await withServer(parts, async ({ base }) => {
     const key = idempotencyKey();
     const first = await signup(base, { email: "one@shop.com", privacyNoticeVersion: "2026-11-06" }, key);
-    assert.equal(first.status, 201);
+    assert.equal(first.status, 200);
     const conflict = await signup(base, { email: "two@shop.com", privacyNoticeVersion: "2026-11-06" }, key);
     assert.equal(conflict.status, 409);
     assert.equal(parts.sheets.rows.length, 1);
@@ -292,7 +303,7 @@ test("parallel duplicate emails append once", async () => {
     assert.equal(parts.sheets.rows.length, 1);
     assert.equal(parts.sheets.calls.append, 1);
     const statuses = results.map((item) => item.status).sort();
-    assert.deepEqual(statuses, [200, 201]);
+    assert.deepEqual(statuses, [200, 200]);
     assert.equal(results.filter((item) => item.json.downloadToken).length, 2);
   });
 });
@@ -303,12 +314,70 @@ test("signup rate limit does not write or grant after the cap", async () => {
     const a = await signup(base, { email: "a@shop.com", privacyNoticeVersion: "2026-11-06" });
     const b = await signup(base, { email: "b@shop.com", privacyNoticeVersion: "2026-11-06" });
     const c = await signup(base, { email: "c@shop.com", privacyNoticeVersion: "2026-11-06" });
-    assert.equal(a.status, 201);
-    assert.equal(b.status, 201);
+    assert.equal(a.status, 200);
+    assert.equal(b.status, 200);
     assert.equal(c.status, 429);
     assert.equal(c.json.downloadToken, undefined);
     assert.equal(parts.sheets.rows.length, 2);
     assert.equal(c.headers.get("retry-after") != null, true);
+  });
+});
+
+test("honeypot and missing Origin do not reveal whether an email is stored", async () => {
+  const parts = stack();
+  await withServer(parts, async ({ base }) => {
+    const bot = await signup(base, {
+      email: "bot@shop.com",
+      privacyNoticeVersion: "2026-11-06",
+      company_website: "https://spam.example",
+    });
+    assert.equal(bot.status, 400);
+    assert.equal(bot.json.downloadToken, undefined);
+    assert.equal(parts.sheets.calls.append, 0);
+
+    const res = await fetch(base + "/v1/signups", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Idempotency-Key": idempotencyKey(),
+      },
+      body: JSON.stringify({ email: "direct@shop.com", privacyNoticeVersion: "2026-11-06" }),
+    });
+    const json = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(json.ok, true);
+    assert.equal(json.signupId, undefined);
+  });
+});
+
+test("nondurable idempotency refuses capture", async () => {
+  const parts = stack({ durable: false });
+  await withServer(parts, async ({ base }) => {
+    const res = await signup(base, { email: "a@shop.com", privacyNoticeVersion: "2026-11-06" });
+    assert.equal(res.status, 503);
+    assert.equal(res.json.downloadToken, undefined);
+    assert.equal(parts.sheets.calls.append, 0);
+  });
+});
+
+test("ambiguous append is reconciled by signup id and a 401 is retried only after a miss", async () => {
+  const parts = stack();
+  let appends = 0;
+  parts.sheets.findSignupId = async (signupId) => (appends === 1 ? null : { signupId });
+  parts.sheets.append = async (row) => {
+    appends += 1;
+    if (appends === 1) {
+      const err = new Error("sheet_unauthorized");
+      err.code = "sheet_unauthorized";
+      throw err;
+    }
+    parts.sheets.rows.push(row);
+  };
+  await withServer(parts, async ({ base }) => {
+    const res = await signup(base, { email: "retry@shop.com", privacyNoticeVersion: "2026-11-06" });
+    assert.equal(res.status, 200);
+    assert.equal(appends, 2);
+    assert.equal(res.json.signupId, undefined);
   });
 });
 

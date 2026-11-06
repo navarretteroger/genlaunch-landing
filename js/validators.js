@@ -21,7 +21,21 @@
     if (/[\u0000-\u001F\u007F]/.test(raw)) return false;
     var trimmed = raw.trim();
     if (!trimmed || trimmed.length > 254) return false;
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed);
+    if (/[",<>;\\()]/.test(trimmed)) return false;
+    var at = trimmed.indexOf("@");
+    if (at <= 0 || at !== trimmed.lastIndexOf("@")) return false;
+    var local = trimmed.slice(0, at);
+    var domain = trimmed.slice(at + 1);
+    if (local.length > 64 || local.charAt(0) === "." || local.charAt(local.length - 1) === "." || local.indexOf("..") !== -1) return false;
+    if (!/^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(local)) return false;
+    var labels = domain.split(".");
+    if (labels.length < 2 || domain.indexOf("..") !== -1) return false;
+    for (var i = 0; i < labels.length; i += 1) {
+      var label = labels[i];
+      if (!label || label.length > 63 || label.charAt(0) === "-" || label.charAt(label.length - 1) === "-") return false;
+      if (!/^[A-Za-z0-9-]+$/.test(label) && !/^[\p{L}\p{N}-]+$/u.test(label)) return false;
+    }
+    return true;
   }
 
   function validateCaptureFields(fields, options) {
@@ -40,7 +54,7 @@
 
   function captureEndpoint(config) {
     if (!config || config.DELIVERY_MODE !== "production") return null;
-    if (!config.CAPTURE_API_BASE) return null;
+    if (!config.CAPTURE_API_BASE || !config.SUPPORT_CONTACT) return null;
     return String(config.CAPTURE_API_BASE).replace(/\/$/, "");
   }
 
@@ -92,8 +106,6 @@
       apiBase: apiBase,
       downloadToken: response.downloadToken,
       downloadExpiresAt: response.downloadExpiresAt,
-      duplicate: response.duplicate === true,
-      signupId: response.signupId,
       privacyNoticeVersion: response.privacyNoticeVersion,
     };
   }

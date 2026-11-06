@@ -59,19 +59,21 @@ test("privacy notice states collection, purpose, non-consent, and retention with
     assert.match(html, /When production capture is on, the server stores the email address you submit\./);
     assert.match(html, /The purpose of storing the email is guide access\./);
     assert.match(html, /marketing_opt_in is stored as false\./);
-    assert.match(html, /That false value is not consent to program follow-up\./);
+    assert.match(html, /That false value is not consent to messages\./);
     assert.match(html, /Outbound sending is off\./);
-    assert.match(html, /This site does not send email and does not track email opens\./);
+    assert.match(html, /This system does not send email and does not track email opens\./);
     assert.match(html, /Saving an email address does not prove you control that inbox\./);
     assert.match(html, /The check in the browser is only a format check\./);
     assert.match(html, /A download token works for anyone who has it until it expires\./);
     assert.match(html, /It is not a link to the private Drive file\./);
     assert.match(html, /The signup sheet is separate from campaign prospect lists\./);
     assert.match(html, /No automatic deletion period is configured\./);
-    assert.match(html, /This is not a certification\./);
-    assert.match(html, /A support or deletion email address is not published on this page\./);
+    assert.match(html, /This is not a retention guarantee or a certification\./);
+    assert.match(html, /A verified deletion contact is not published on this page\./);
     assert.match(html, /No tracking pixels are on this page\./);
-    assert.match(html, /five business days after a verified email open/);
+    assert.equal(html.includes("five business days"), false);
+    assert.equal(html.includes("Handoff"), false);
+    assert.equal(html.includes("optional one follow-up"), false);
     assert.equal(html.includes("@gmail.com"), false);
   }
 });
@@ -91,6 +93,8 @@ test("thank-you keeps preview success separate and has no price or checkout", ()
   assert.equal(html.includes("1497"), false);
   assert.equal(html.includes("stripe"), false);
   assert.equal(html.includes("skool"), false);
+  assert.equal(html.includes("Handoff"), false);
+  assert.equal(html.includes("already on the signup sheet"), false);
   assert.equal(html.includes('href="http'), false);
   assert.equal(html.includes("<form"), false);
 });

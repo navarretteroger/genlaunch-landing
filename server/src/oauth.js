@@ -1,6 +1,7 @@
 "use strict";
 
 const { CodedError } = require("./errors");
+const { googleFetch } = require("./googleFetch");
 
 class OwnerOAuth {
   constructor(options) {
@@ -9,6 +10,7 @@ class OwnerOAuth {
     this.refreshToken = options.refreshToken || "";
     this.fetchImpl = options.fetchImpl;
     this.now = options.now || Date.now;
+    this.timeoutMs = options.timeoutMs || 8000;
     this.cached = null;
   }
 
@@ -32,12 +34,11 @@ class OwnerOAuth {
     });
     let res;
     try {
-      res = await this.fetchImpl("https://oauth2.googleapis.com/token", {
+      res = await googleFetch(this.fetchImpl, "https://oauth2.googleapis.com/token", {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: body.toString(),
-        redirect: "manual",
-      });
+      }, this.timeoutMs);
     } catch (err) {
       throw new CodedError("oauth_refresh_failed");
     }

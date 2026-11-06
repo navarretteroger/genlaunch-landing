@@ -8,17 +8,36 @@ function clone(value) {
 }
 
 class MemoryIdempotencyStore {
-  constructor() {
+  constructor(options) {
+    const settings = options || {};
     this.records = new Map();
+    this.durable = settings.durable === true;
+    this.maxRecords = settings.maxRecords || 5000;
+    this.ttlMs = settings.ttlMs || 48 * 60 * 60 * 1000;
+    this.now = settings.now || Date.now;
+  }
+
+  _prune() {
+    const cutoff = this.now() - this.ttlMs;
+    for (const [key, value] of this.records) {
+      if (typeof value.storedAtMs === "number" && value.storedAtMs < cutoff) this.records.delete(key);
+    }
+    while (this.records.size > this.maxRecords) {
+      const oldest = this.records.keys().next().value;
+      this.records.delete(oldest);
+    }
   }
 
   async get(key) {
+    this._prune();
     const found = this.records.get(key);
     return found ? clone(found) : null;
   }
 
   async set(key, value) {
+    this._prune();
     this.records.set(key, clone(value));
+    this._prune();
   }
 }
 
@@ -27,6 +46,9 @@ class FileIdempotencyStore {
     this.filePath = filePath;
     this.now = now || Date.now;
     this.chain = Promise.resolve();
+    this.durable = true;
+    this.maxRecords = 5000;
+    this.ttlMs = 48 * 60 * 60 * 1000;
   }
 
   _enqueue(fn) {
@@ -48,12 +70,22 @@ class FileIdempotencyStore {
   async set(key, value) {
     return this._enqueue(async () => {
       const data = await readStore(this.filePath);
-      const cutoff = this.now() - 48 * 60 * 60 * 1000;
-      Object.keys(data.records).forEach((existing) => {
+      const cutoff = this.now() - this.ttlMs;
+      const entries = Object.keys(data.records);
+      entries.forEach((existing) => {
         const storedAt = data.records[existing] && data.records[existing].storedAtMs;
         if (typeof storedAt === "number" && storedAt < cutoff) delete data.records[existing];
       });
       data.records[key] = clone(value);
+      const remaining = Object.keys(data.records).sort((a, b) => {
+        const left = data.records[a].storedAtMs || 0;
+        const right = data.records[b].storedAtMs || 0;
+        return left - right;
+      });
+      while (remaining.length > this.maxRecords) {
+        const drop = remaining.shift();
+        delete data.records[drop];
+      }
       await writeStore(this.filePath, data);
     });
   }
@@ -77,18 +109,13 @@ async function writeStore(filePath, data) {
   await fs.promises.rename(tmp, filePath);
 }
 
-async function openIdempotencyStore(config, log) {
-  if (config.idempotencyMode === "memory") return new MemoryIdempotencyStore();
-  try {
-    await fs.promises.mkdir(path.dirname(config.idempotencyPath), { recursive: true });
-    const probe = path.join(path.dirname(config.idempotencyPath), ".write-probe");
-    await fs.promises.writeFile(probe, "ok", { mode: 0o600 });
-    await fs.promises.unlink(probe);
-    return new FileIdempotencyStore(config.idempotencyPath);
-  } catch (err) {
-    if (log) log({ idempotency: "memory", reason: "data_dir_unwritable" });
-    return new MemoryIdempotencyStore();
-  }
+async function openIdempotencyStore(config) {
+  if (config.idempotencyMode === "memory") return new MemoryIdempotencyStore({ durable: false });
+  await fs.promises.mkdir(path.dirname(config.idempotencyPath), { recursive: true });
+  const probe = path.join(path.dirname(config.idempotencyPath), ".write-probe");
+  await fs.promises.writeFile(probe, "ok", { mode: 0o600 });
+  await fs.promises.unlink(probe);
+  return new FileIdempotencyStore(config.idempotencyPath);
 }
 
 module.exports = {
