@@ -1,0 +1,8 @@
+{
+  "name": "genlaunch-landing",
+  "private": true,
+  "description": "Static Customer Recovery landing page. Tests do not submit the SendFox form.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}
