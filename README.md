@@ -6,4 +6,4 @@ GenLaunch Customer Recovery guide landing page. Static HTML, CSS and JS, no buil
 - `styles.css`: styles, including overrides for the SendFox form
 - `main.js`: pop-up, sticky button and scroll effects
 
-Before sending traffic: set up the guide delivery email in SendFox, add this site's domain to the form's allowed domains, and link a privacy page.
+`privacy.html` is the privacy notice. The signup page links to it. The guide file is not stored in this repository.
