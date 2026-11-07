@@ -15,6 +15,7 @@ const { OWNER_ACCOUNT } = require("../src/config");
 const { REDIRECT_PORT, REDIRECT_URI, createPkce, buildConsentUrl, assertTokenOutputPath } = require("../src/oauthSetup");
 const { loadConfig } = require("../src/config");
 const { expectedOwnerFiles, evaluateOwnerPicks, renderPickerPage } = require("../src/pickerGrant");
+const { assessTokenGrant } = require("../src/selectedFiles");
 
 const command = process.argv[2];
 
@@ -100,7 +101,7 @@ function exchange() {
       if (!verdict.ok || !granted) {
         res.statusCode = 409;
         res.end(JSON.stringify({ ok: false, error: "picked_files_do_not_match" }));
-        console.error("The picker selection did not match the confirmed signup sheet and guide. No file was shared.");
+        console.error("Selection was not saved. Cancelling or picking a different file does not revoke access Google may already have granted. This program does not revoke account grants.");
         return;
       }
       await fs.promises.mkdir(path.dirname(outputPath), { recursive: true });
@@ -153,11 +154,13 @@ function exchange() {
         signal: AbortSignal.timeout(8000),
       });
       const json = await tokenRes.json();
-      if (!json || !json.refresh_token) {
+      const grant = assessTokenGrant(json);
+      if (!json || !json.refresh_token || !grant.ok) {
         res.statusCode = 502;
-        res.end("<!doctype html><title>OAuth</title><p>No refresh token was issued. You can close this window.</p>");
-        console.error("No refresh token was issued. Re-run consent with prompt=consent. Do not share the PDF or the sheet.");
+        res.end("<!doctype html><title>OAuth</title><p>The token was not saved. You can close this window. This page does not revoke anything in the Google account.</p>");
+        console.error("Token was not saved. Google did not report exactly the file scope. This program does not revoke account grants.");
         process.exitCode = 1;
+        server.close();
       } else {
         granted = { accessToken: json.access_token, refreshToken: json.refresh_token };
         res.end(renderPickerPage());

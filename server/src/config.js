@@ -5,10 +5,19 @@ const path = require("path");
 /** Existing account that owns the private PDF and the signup sheet. Not a new account. */
 const OWNER_ACCOUNT = "navarretteroger@gmail.com";
 
-const SHEET_ID_DEFAULT = "1RXBQl4KQU-FUOLBmL6iXjy3mcaIzw8Xl5n5vVtcbRVw";
+const {
+  SELECTED_SPREADSHEET_ID,
+  SELECTED_PDF_FILE_ID,
+  FILE_SCOPED_OAUTH_SCOPE,
+  assertRequestedScopes,
+  assertSelectedSpreadsheet,
+  assertSelectedPdf,
+} = require("./selectedFiles");
+
+const SHEET_ID_DEFAULT = SELECTED_SPREADSHEET_ID;
 const SHEET_TAB_DEFAULT = "Customer Recovery \u2014 Landing Page Signups";
 const SHEET_GID_DEFAULT = "389366344";
-const DRIVE_FILE_ID_DEFAULT = "1508Lh4WrwEcHKeFOx0RFm_cOSwbiHEgh";
+const DRIVE_FILE_ID_DEFAULT = SELECTED_PDF_FILE_ID;
 const PRIVACY_NOTICE_VERSION = "2026-11-06";
 const SOURCE_LABEL = "genlaunch-landing";
 const PAGES_ORIGIN = "https://navarretteroger.github.io";
@@ -23,9 +32,7 @@ const REQUIRED_HEADERS = Object.freeze([
 ]);
 
 /** Per-file access. The owner must pick the spreadsheet and the PDF with Google Picker. */
-const OAUTH_SCOPES = Object.freeze([
-  "https://www.googleapis.com/auth/drive.file",
-]);
+const OAUTH_SCOPES = Object.freeze(assertRequestedScopes([FILE_SCOPED_OAUTH_SCOPE]));
 
 function loadConfig(env) {
   const source = env || process.env;
@@ -51,10 +58,15 @@ function loadConfig(env) {
     googleClientSecret: source.GOOGLE_OAUTH_CLIENT_SECRET || "",
     googleRefreshToken: source.GOOGLE_OAUTH_REFRESH_TOKEN || "",
     ignoredApplicationCredentials: Boolean(source.GOOGLE_APPLICATION_CREDENTIALS),
-    sheetId: source.GOOGLE_SHEET_ID || SHEET_ID_DEFAULT,
+    sheetId: assertSelectedSpreadsheet(
+      source.GOOGLE_SHEET_ID === undefined ? SHEET_ID_DEFAULT : source.GOOGLE_SHEET_ID
+    ),
     sheetTab: source.GOOGLE_SHEET_TAB || SHEET_TAB_DEFAULT,
     sheetGid: String(source.GOOGLE_SHEET_GID || SHEET_GID_DEFAULT),
-    driveFileId: source.DRIVE_FILE_ID || DRIVE_FILE_ID_DEFAULT,
+    driveFileId: assertSelectedPdf(
+      source.DRIVE_FILE_ID === undefined ? DRIVE_FILE_ID_DEFAULT : source.DRIVE_FILE_ID
+    ),
+    oauthScopes: assertRequestedScopes(source.GOOGLE_OAUTH_SCOPES || OAUTH_SCOPES),
     grantSecret,
     grantTtlSeconds: Number(source.GRANT_TTL_SECONDS || 900),
     privacyNoticeVersion: source.PRIVACY_NOTICE_VERSION || PRIVACY_NOTICE_VERSION,
@@ -69,7 +81,6 @@ function loadConfig(env) {
     globalDownloadPerHour: Number(source.GLOBAL_DOWNLOAD_PER_HOUR || 60),
     googleTimeoutMs: Number(source.GOOGLE_TIMEOUT_MS || 8000),
     requiredHeaders: REQUIRED_HEADERS,
-    oauthScopes: OAUTH_SCOPES,
     outboundSending: "off",
   };
 }
@@ -101,6 +112,9 @@ function assertRuntimeConfig(config) {
     err.code = "trusted_proxy_misconfigured";
     throw err;
   }
+  assertRequestedScopes(config.oauthScopes);
+  assertSelectedSpreadsheet(config.sheetId);
+  assertSelectedPdf(config.driveFileId);
 }
 
 module.exports = {

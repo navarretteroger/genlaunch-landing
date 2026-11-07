@@ -4,6 +4,7 @@ const { CodedError } = require("./errors");
 const { sanitizeCell } = require("./sanitize");
 const { OwnerOAuth } = require("./oauth");
 const { googleFetch } = require("./googleFetch");
+const { assertSelectedSpreadsheet } = require("./selectedFiles");
 
 function quoteTab(name) {
   return "'" + String(name).replace(/'/g, "''") + "'";
@@ -25,14 +26,13 @@ function createSheetsClient(options) {
     });
   let readyUntil = 0;
 
+  function spreadsheetRoot() {
+    const spreadsheetId = assertSelectedSpreadsheet(config.sheetId);
+    return "https://sheets.googleapis.com/v4/spreadsheets/" + encodeURIComponent(spreadsheetId);
+  }
+
   function valuesUrl(range, suffix) {
-    return (
-      "https://sheets.googleapis.com/v4/spreadsheets/" +
-      encodeURIComponent(config.sheetId) +
-      "/values/" +
-      encodeURIComponent(range) +
-      (suffix || "")
-    );
+    return spreadsheetRoot() + "/values/" + encodeURIComponent(range) + (suffix || "");
   }
 
   async function requestOnce(url, init) {
@@ -93,13 +93,10 @@ function createSheetsClient(options) {
   }
 
   async function assertReady() {
+    assertSelectedSpreadsheet(config.sheetId);
     const nowMs = now();
     if (nowMs < readyUntil) return;
-    const meta = await authorized(
-      "https://sheets.googleapis.com/v4/spreadsheets/" +
-        encodeURIComponent(config.sheetId) +
-        "?fields=sheets.properties(sheetId,title)"
-    );
+    const meta = await authorized(spreadsheetRoot() + "?fields=sheets.properties(sheetId,title)");
     const sheets = meta && Array.isArray(meta.sheets) ? meta.sheets : [];
     const match = sheets.find((sheet) => sheet.properties && sheet.properties.title === config.sheetTab);
     if (!match) throw new CodedError("sheet_tab_mismatch");
@@ -138,6 +135,7 @@ function createSheetsClient(options) {
   }
 
   async function append(row) {
+    assertSelectedSpreadsheet(config.sheetId);
     await assertReady();
     const values = config.requiredHeaders.map((header) => sanitizeCell(row[header] == null ? "" : row[header]));
     const range = quoteTab(config.sheetTab) + "!A:F";

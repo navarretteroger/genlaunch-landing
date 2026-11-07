@@ -17,7 +17,7 @@ test("OAuth refresh uses the owner refresh token and caches the access token", a
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, body: init.body });
-    return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, token_type: "Bearer" });
+    return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, token_type: "Bearer", scope: "https://www.googleapis.com/auth/drive.file" });
   };
   const auth = new OwnerOAuth({
     clientId: "test-client-id",
@@ -43,7 +43,7 @@ test("Sheets append uses RAW, exact tab, and neutralizes formula email", async (
   const fetchImpl = async (url, init) => {
     calls.push({ url, method: init.method, body: init.body, authorization: init.headers.Authorization });
     if (url.includes("oauth2.googleapis.com")) {
-      return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600 });
+      return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, scope: "https://www.googleapis.com/auth/drive.file" });
     }
     if (url.includes("fields=sheets.properties")) {
       return jsonResponse(200, {
@@ -93,7 +93,7 @@ test("Sheets header or tab mismatch does not append", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push(url);
-    if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600 });
+    if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, scope: "https://www.googleapis.com/auth/drive.file" });
     if (url.includes("fields=sheets.properties")) {
       return jsonResponse(200, {
         sheets: [{ properties: { sheetId: 1, title: SHEET_TAB_DEFAULT } }],
@@ -108,7 +108,7 @@ test("Sheets header or tab mismatch does not append", async () => {
 
 test("Sheets unauthorized response does not return a public link", async () => {
   const fetchImpl = async (url) => {
-    if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600 });
+    if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, scope: "https://www.googleapis.com/auth/drive.file" });
     return {
       status: 403,
       headers: new Headers({ location: "https://drive.google.com/file/d/private/view" }),
@@ -132,7 +132,7 @@ test("Drive streams the configured file and refuses redirects", async () => {
   const calls = [];
   const fetchImpl = async (url, init) => {
     calls.push({ url, redirect: init.redirect, authorization: init.headers && init.headers.Authorization });
-    if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600 });
+    if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, scope: "https://www.googleapis.com/auth/drive.file" });
     assert.ok(url.includes("/drive/v3/files/" + encodeURIComponent(DRIVE_FILE_ID_DEFAULT)));
     assert.match(url, /alt=media/);
     assert.match(url, /supportsAllDrives=false/);
@@ -151,7 +151,7 @@ test("Drive streams the configured file and refuses redirects", async () => {
 test("Drive 302 is not followed and 403 is unauthorized", async () => {
   async function driveWith(status, location) {
     const fetchImpl = async (url) => {
-      if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600 });
+      if (url.includes("oauth2.googleapis.com")) return jsonResponse(200, { access_token: "access-fixture", expires_in: 3600, scope: "https://www.googleapis.com/auth/drive.file" });
       return {
         status,
         headers: new Headers(location ? { location, "content-type": "text/html" } : { "content-type": "text/html" }),
@@ -179,7 +179,7 @@ test("Drive retries once after an access token 401", async () => {
   const fetchImpl = async (url) => {
     if (url.includes("oauth2.googleapis.com")) {
       tokenCalls += 1;
-      return jsonResponse(200, { access_token: "access-" + tokenCalls, expires_in: 3600 });
+      return jsonResponse(200, { access_token: "access-" + tokenCalls, expires_in: 3600, scope: "https://www.googleapis.com/auth/drive.file" });
     }
     driveCalls += 1;
     if (driveCalls === 1) {

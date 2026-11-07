@@ -2,6 +2,7 @@
 
 const { CodedError } = require("./errors");
 const { googleFetch } = require("./googleFetch");
+const { assessTokenGrant } = require("./selectedFiles");
 
 class OwnerOAuth {
   constructor(options) {
@@ -32,6 +33,7 @@ class OwnerOAuth {
       refresh_token: this.refreshToken,
       grant_type: "refresh_token",
     });
+    if (body.has("scope")) throw new CodedError("oauth_scope_widening_refused");
     let res;
     try {
       res = await googleFetch(this.fetchImpl, "https://oauth2.googleapis.com/token", {
@@ -48,6 +50,10 @@ class OwnerOAuth {
     const json = await res.json();
     if (!json || !json.access_token) {
       throw new CodedError("oauth_refresh_failed");
+    }
+    const grant = assessTokenGrant(json);
+    if (!grant.ok) {
+      throw new CodedError(grant.code);
     }
     const ttlSeconds = Number(json.expires_in) > 0 ? Number(json.expires_in) : 3600;
     this.cached = {

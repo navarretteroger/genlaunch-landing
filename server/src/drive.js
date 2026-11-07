@@ -4,6 +4,7 @@ const { Readable } = require("stream");
 const { CodedError } = require("./errors");
 const { OwnerOAuth } = require("./oauth");
 const { fetchUntilHeaders, streamWithIdleTimeout } = require("./googleFetch");
+const { assertSelectedPdf } = require("./selectedFiles");
 
 function createDriveClient(options) {
   const config = options.config;
@@ -21,9 +22,10 @@ function createDriveClient(options) {
     });
 
   function fileUrl() {
+    const fileId = assertSelectedPdf(config.driveFileId);
     return (
       "https://www.googleapis.com/drive/v3/files/" +
-      encodeURIComponent(config.driveFileId) +
+      encodeURIComponent(fileId) +
       "?alt=media&supportsAllDrives=false"
     );
   }
@@ -41,6 +43,7 @@ function createDriveClient(options) {
   }
 
   async function openConfiguredPdf(options) {
+    assertSelectedPdf(config.driveFileId);
     const signal = options && options.signal;
     if (!config.driveFileId || !config.googleRefreshToken) {
       throw new CodedError("not_configured");

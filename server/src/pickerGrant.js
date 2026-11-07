@@ -14,12 +14,19 @@ function expectedOwnerFiles(config) {
 }
 
 function evaluateOwnerPicks(picks, expected) {
-  const spreadsheetId = picks && picks.spreadsheetId;
-  const pdfFileId = picks && picks.pdfFileId;
-  if (spreadsheetId !== expected.spreadsheetId || pdfFileId !== expected.pdfFileId) {
-    return { ok: false, reason: "picked_files_do_not_match" };
+  const refused = { ok: false, revokesProviderGrant: false };
+  if (!picks || picks.cancelled === true) {
+    return Object.assign({ reason: "pick_cancelled" }, refused);
   }
-  return { ok: true };
+  const spreadsheetId = picks.spreadsheetId;
+  const pdfFileId = picks.pdfFileId;
+  if (spreadsheetId == null || spreadsheetId === "" || pdfFileId == null || pdfFileId === "") {
+    return Object.assign({ reason: "pick_cancelled" }, refused);
+  }
+  if (spreadsheetId !== expected.spreadsheetId || pdfFileId !== expected.pdfFileId) {
+    return Object.assign({ reason: "picked_files_do_not_match" }, refused);
+  }
+  return { ok: true, reason: "selected_files", revokesProviderGrant: false };
 }
 
 function renderPickerPage() {

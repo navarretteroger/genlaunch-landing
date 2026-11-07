@@ -3,6 +3,7 @@
 const crypto = require("crypto");
 const path = require("path");
 const { OAUTH_SCOPES, OWNER_ACCOUNT } = require("./config");
+const { assertRequestedScopes, FILE_SCOPED_OAUTH_SCOPE } = require("./selectedFiles");
 
 const REDIRECT_PORT = 53682;
 const REDIRECT_URI = "http://127.0.0.1:" + REDIRECT_PORT + "/";
@@ -19,12 +20,21 @@ function buildConsentUrl(options) {
   if (!options.codeChallenge || !options.state) throw new Error("pkce_required");
   const redirectUri = options.redirectUri || REDIRECT_URI;
   if (!isLoopbackRedirect(redirectUri)) throw new Error("redirect_not_loopback");
+  if (options.includeGrantedScopes === true || options.include_granted_scopes === "true") {
+    throw new Error("oauth_scope_widening_refused");
+  }
+  const scopes = assertRequestedScopes(
+    Object.prototype.hasOwnProperty.call(options, "scopes") ? options.scopes : OAUTH_SCOPES
+  );
+  if (scopes.join(" ") !== FILE_SCOPED_OAUTH_SCOPE) {
+    throw new Error("oauth_scope_widening_refused");
+  }
   const loginHint = options.loginHint || OWNER_ACCOUNT;
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", options.clientId);
   url.searchParams.set("redirect_uri", redirectUri);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", OAUTH_SCOPES.join(" "));
+  url.searchParams.set("scope", FILE_SCOPED_OAUTH_SCOPE);
   url.searchParams.set("access_type", "offline");
   url.searchParams.set("prompt", "consent");
   url.searchParams.set("include_granted_scopes", "false");

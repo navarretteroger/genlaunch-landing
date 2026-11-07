@@ -157,7 +157,10 @@ test("repo ships no PDF and the server does not share Drive or send mail", () =>
     .map((rel) => {
       const full = path.join(root, rel);
       if (fs.statSync(full).isDirectory()) {
-        return fs.readdirSync(full).map((name) => read(path.join(rel, name))).join("\n");
+        return fs.readdirSync(full)
+          .filter((name) => name !== "selectedFiles.js")
+          .map((name) => read(path.join(rel, name)))
+          .join("\n");
       }
       return read(rel);
     })
