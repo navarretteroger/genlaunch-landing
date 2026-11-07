@@ -1,10 +1,13 @@
 /**
- * Public SendFox settings only. Empty and unreviewed means the page must not
- * load SendFox or claim the guide was emailed. No API key belongs here.
- * Roger approves a current Customer Recovery form before these fields change.
+ * Current Customer Recovery guide reference. Both switches stay off, so the
+ * page must not load the loader or submit the form.
  */
 window.GENLAUNCH_SENDFOX = Object.freeze({
-  OFFER_REVIEWED: false,
-  FORM_ID: "",
-  PUBLIC_ID: ""
+  INTEGRATION_ENABLED: false,
+  DELIVERY_ENABLED: false,
+  PUBLIC_FORM_ID: "1xvkdn",
+  LIST_ID: "684175",
+  INTERNAL_FORM_ID: "298803",
+  LOADER_SRC: "https://cdn.sendfox.com/js/embed.js",
+  API_ORIGIN: "https://sendfox.com"
 });

@@ -1,112 +1,88 @@
 /**
- * SendFox embed gate. Official legacy markup is documented at
- * https://help.sendfox.com/article/302-how-can-i-format-my-sendfox-html-form
- * and https://help.sendfox.com/article/306-how-to-create-an-embeddable-html-form
- * The recommended one-line loader is copied from SendFox only after Roger
- * publishes a current Customer Recovery form. This file does not invent that
- * snippet and does not contain an API key.
+ * Reference gate for the current Customer Recovery SendFox loader.
+ * The page does not mount this loader. Integration and delivery stay off.
+ * The vendor file is not executed from this module.
  */
 (function (root, factory) {
   var api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;
   root.GenlaunchSendFox = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
-  var BLOCKED_IDS = {
+  var CURRENT_PUBLIC_ID = "1xvkdn";
+  var LOADER_SRC = "https://cdn.sendfox.com/js/embed.js";
+  var API_ORIGIN = "https://sendfox.com";
+  var LEGACY_LOADER = "https://sendfox.com/js/form.js";
+  var SUBSTITUTIONS = {
     "261674": true,
     "1vd796": true,
     "586227": true,
     "232839": true,
     "549074": true
   };
-  var ID_RE = /^[A-Za-z0-9]{4,32}$/;
-  var SCRIPT_SRC = "https://sendfox.com/js/form.js";
-  var EMPTY_EMAIL = "Enter your work email to continue.";
-  var INVALID_EMAIL = "Enter a valid email address (for example, you@yourshop.com).";
-  var NOT_READY = "Signup is not ready. Nothing was sent, and the guide was not emailed.";
+  var NOT_READY = "Signup and guide delivery are not available yet. No information has been submitted and no email has been sent.";
 
-  function isValidEmail(value) {
-    var raw = String(value || "");
-    if (/[\u0000-\u001F\u007F]/.test(raw)) return false;
-    var trimmed = raw.trim();
-    if (!trimmed || trimmed.length > 254) return false;
-    if (/[",<>;\\()]/.test(trimmed)) return false;
-    var at = trimmed.indexOf("@");
-    if (at <= 0 || at !== trimmed.lastIndexOf("@")) return false;
-    var local = trimmed.slice(0, at);
-    var domain = trimmed.slice(at + 1);
-    if (local.length > 64 || local.charAt(0) === "." || local.charAt(local.length - 1) === "." || local.indexOf("..") !== -1) return false;
-    if (!/^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/.test(local)) return false;
-    var labels = domain.split(".");
-    if (labels.length < 2 || domain.indexOf("..") !== -1) return false;
-    for (var i = 0; i < labels.length; i += 1) {
-      var label = labels[i];
-      if (!label || label.length > 63 || label.charAt(0) === "-" || label.charAt(label.length - 1) === "-") return false;
-      if (!/^[A-Za-z0-9-]+$/.test(label) && !/^[\p{L}\p{N}-]+$/u.test(label)) return false;
+  function isHttpUrl(value) {
+    try {
+      var url = new URL(String(value));
+      return url.protocol === "http:" || url.protocol === "https:";
+    } catch (err) {
+      return false;
     }
-    return true;
   }
 
-  function assess(config) {
+  function isHostedForm(value) {
+    if (!value || !isHttpUrl(value)) return false;
+    var url = new URL(String(value));
+    return url.hostname === "sendfox.com" && url.pathname.indexOf("/form/") === 0;
+  }
+
+  function referenceLoader(config) {
     var reasons = [];
-    var formId = config && config.FORM_ID ? String(config.FORM_ID) : "";
-    var publicId = config && config.PUBLIC_ID ? String(config.PUBLIC_ID) : "";
-    if (!config || config.OFFER_REVIEWED !== true) reasons.push("offer_not_reviewed");
-    if (!formId) reasons.push("form_id_missing");
-    else if (!ID_RE.test(formId) || BLOCKED_IDS[formId]) reasons.push("form_id_rejected");
-    if (!publicId) reasons.push("public_id_missing");
-    else if (!ID_RE.test(publicId) || BLOCKED_IDS[publicId]) reasons.push("public_id_rejected");
-    var canonical = formId && publicId ? "https://sendfox.com/form/" + formId + "/" + publicId : "";
-    if (config && Object.prototype.hasOwnProperty.call(config, "ACTION")) {
-      var given = String(config.ACTION || "");
-      var parsed = null;
-      try { parsed = new URL(given); } catch (err) { parsed = null; }
-      if (!parsed || parsed.protocol !== "https:" || parsed.hostname !== "sendfox.com" || parsed.pathname !== "/form/" + formId + "/" + publicId || parsed.search || parsed.hash || parsed.username || parsed.password || given !== canonical) {
-        reasons.push("action_rejected");
-      }
+    var source = config || {};
+    var publicId = source.PUBLIC_FORM_ID ? String(source.PUBLIC_FORM_ID) : "";
+    var loader = source.LOADER_SRC ? String(source.LOADER_SRC) : "";
+    var api = source.API_ORIGIN ? String(source.API_ORIGIN) : "";
+    if (source.INTEGRATION_ENABLED !== true) reasons.push("integration_disabled");
+    if (source.DELIVERY_ENABLED !== true) reasons.push("delivery_disabled");
+    if (SUBSTITUTIONS[publicId] || SUBSTITUTIONS[source.FORM_ID] || SUBSTITUTIONS[source.LIST_ID] || SUBSTITUTIONS[source.INTERNAL_FORM_ID]) {
+      reasons.push("substitution_rejected");
+    }
+    if (publicId !== CURRENT_PUBLIC_ID) reasons.push("public_form_rejected");
+    if (loader === LEGACY_LOADER) reasons.push("legacy_loader_rejected");
+    if (loader !== LOADER_SRC) reasons.push("loader_rejected");
+    if (isHostedForm(loader) || isHostedForm(api) || isHostedForm(source.HOSTED_URL) || isHostedForm(source.ACTION)) {
+      reasons.push("hosted_form_rejected");
+    }
+    var apiUrl = null;
+    try { apiUrl = new URL(api); } catch (err) { apiUrl = null; }
+    if (!apiUrl || apiUrl.href !== API_ORIGIN + "/" && api !== API_ORIGIN || (apiUrl && (apiUrl.protocol !== "https:" || apiUrl.hostname !== "sendfox.com" || apiUrl.username || apiUrl.password || apiUrl.search || apiUrl.hash))) {
+      reasons.push("api_rejected");
     }
     if (reasons.length) {
-      return { ok: false, reasons: reasons, requestsProvider: false };
-    }
-    var action = "https://sendfox.com/form/" + formId + "/" + publicId;
-    var url = new URL(action);
-    if (url.protocol !== "https:" || url.hostname !== "sendfox.com" || url.pathname !== "/form/" + formId + "/" + publicId || url.search || url.username || url.password) {
-      return { ok: false, reasons: ["action_rejected"], requestsProvider: false };
+      return { matchesVendor: false, mountVendor: false, requestsProvider: false, html: "", reasons: reasons };
     }
     return {
-      ok: true,
-      reasons: [],
-      requestsProvider: true,
-      method: "post",
-      action: action,
-      scriptSrc: SCRIPT_SRC,
-      formClass: "sendfox-form",
-      async: true,
-      emailName: "email",
-      honeypotName: "a_password"
+      matchesVendor: true,
+      mountVendor: false,
+      requestsProvider: false,
+      html: '<script src="' + LOADER_SRC + '" data-form="' + CURRENT_PUBLIC_ID + '" data-api="' + API_ORIGIN + '" async></script>',
+      reasons: []
     };
   }
 
-  function legacyMarkup(embed) {
-    if (!embed || !embed.ok) return "";
-    return [
-      '<form method="post" action="' + embed.action + '" class="sendfox-form" data-async="true" data-recaptcha="false">',
-      '<label for="sendfox_form_email">Work email</label>',
-      '<input id="sendfox_form_email" type="email" name="email" required />',
-      '<div aria-hidden="true"><input type="text" name="a_password" tabindex="-1" value="" autocomplete="off" /></div>',
-      '<button type="submit">Get the free Customer Recovery guide.</button>',
-      "</form>",
-      '<script src="' + embed.scriptSrc + '" charset="utf-8"></script>'
-    ].join("");
+  function pageBehavior() {
+    return { mountVendor: false, requestsProvider: false, message: NOT_READY };
   }
 
   return {
-    BLOCKED_IDS: BLOCKED_IDS,
-    SCRIPT_SRC: SCRIPT_SRC,
-    EMPTY_EMAIL: EMPTY_EMAIL,
-    INVALID_EMAIL: INVALID_EMAIL,
+    CURRENT_PUBLIC_ID: CURRENT_PUBLIC_ID,
+    LOADER_SRC: LOADER_SRC,
+    API_ORIGIN: API_ORIGIN,
+    LEGACY_LOADER: LEGACY_LOADER,
+    SUBSTITUTIONS: SUBSTITUTIONS,
     NOT_READY: NOT_READY,
-    isValidEmail: isValidEmail,
-    assess: assess,
-    legacyMarkup: legacyMarkup
+    isHostedForm: isHostedForm,
+    referenceLoader: referenceLoader,
+    pageBehavior: pageBehavior
   };
 });

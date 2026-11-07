@@ -281,6 +281,11 @@ h2 {
   outline-offset: 2px;
   border-color: var(--focus);
 }
+.field input:disabled {
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
 .field-error {
   display: none;
   color: var(--danger);

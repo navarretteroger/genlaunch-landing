@@ -7,60 +7,101 @@ const path = require("path");
 const fox = require("../js/sendfox.js");
 
 const root = path.resolve(__dirname, "..");
+const VENDOR = '<script src="https://cdn.sendfox.com/js/embed.js" data-form="1xvkdn" data-api="https://sendfox.com" async></script>';
+const HOSTED = "https://sendfox.com/form/mnn70x/1xvkdn";
 
 function read(rel) {
   return fs.readFileSync(path.join(root, rel), "utf8");
 }
 
-const PAGES = ["index.html", "thank-you.html", "privacy.html", "js/config.js", "js/main.js", "js/sendfox.js", "css/styles.css"];
+const PAGES = ["index.html", "thank-you.html", "privacy.html", "js/main.js", "css/styles.css"];
 
-test("shipped config keeps SendFox capture disabled", () => {
+function shippedConfig() {
+  return {
+    INTEGRATION_ENABLED: false,
+    DELIVERY_ENABLED: false,
+    PUBLIC_FORM_ID: "1xvkdn",
+    LIST_ID: "684175",
+    INTERNAL_FORM_ID: "298803",
+    LOADER_SRC: fox.LOADER_SRC,
+    API_ORIGIN: fox.API_ORIGIN
+  };
+}
+
+function enabledReference() {
+  const config = shippedConfig();
+  config.INTEGRATION_ENABLED = true;
+  config.DELIVERY_ENABLED = true;
+  return config;
+}
+
+test("shipped reference stays disabled and does not mount the loader", () => {
   const config = read("js/config.js");
-  assert.match(config, /OFFER_REVIEWED:\s*false/);
-  assert.match(config, /FORM_ID:\s*""/);
-  assert.match(config, /PUBLIC_ID:\s*""/);
-  const verdict = fox.assess({ OFFER_REVIEWED: false, FORM_ID: "", PUBLIC_ID: "" });
-  assert.equal(verdict.ok, false);
+  assert.match(config, /INTEGRATION_ENABLED:\s*false/);
+  assert.match(config, /DELIVERY_ENABLED:\s*false/);
+  assert.match(config, /PUBLIC_FORM_ID:\s*"1xvkdn"/);
+  assert.match(config, /LIST_ID:\s*"684175"/);
+  assert.match(config, /INTERNAL_FORM_ID:\s*"298803"/);
+  const verdict = fox.referenceLoader(shippedConfig());
+  assert.equal(verdict.matchesVendor, false);
+  assert.equal(verdict.mountVendor, false);
   assert.equal(verdict.requestsProvider, false);
-  assert.equal(fox.legacyMarkup(verdict), "");
+  assert.equal(verdict.html, "");
+  assert.equal(fox.pageBehavior().mountVendor, false);
+  assert.equal(fox.pageBehavior(enabledReference()).mountVendor, false);
 });
 
-test("a reviewed fixture renders the documented SendFox legacy form", () => {
-  const verdict = fox.assess({
-    OFFER_REVIEWED: true,
-    FORM_ID: "crmguideform1",
-    PUBLIC_ID: "publicfixture1"
+test("the exact current loader matches only as an unmounted reference", () => {
+  const verdict = fox.referenceLoader(enabledReference());
+  assert.equal(verdict.matchesVendor, true);
+  assert.equal(verdict.mountVendor, false);
+  assert.equal(verdict.requestsProvider, false);
+  assert.equal(verdict.html, VENDOR);
+  assert.equal(verdict.html.includes("form.js"), false);
+  assert.equal(verdict.html.includes("/form/"), false);
+});
+
+test("legacy loader, hosted form, and wrong ids are rejected", () => {
+  const legacy = enabledReference();
+  legacy.LOADER_SRC = "https://sendfox.com/js/form.js";
+  assert.equal(fox.referenceLoader(legacy).matchesVendor, false);
+  assert.ok(fox.referenceLoader(legacy).reasons.includes("legacy_loader_rejected"));
+
+  const httpLoader = enabledReference();
+  httpLoader.LOADER_SRC = "http://cdn.sendfox.com/js/embed.js";
+  assert.equal(fox.referenceLoader(httpLoader).matchesVendor, false);
+
+  const badApi = enabledReference();
+  badApi.API_ORIGIN = "http://sendfox.com";
+  assert.equal(fox.referenceLoader(badApi).matchesVendor, false);
+
+  const otherApi = enabledReference();
+  otherApi.API_ORIGIN = "https://evil.example";
+  assert.equal(fox.referenceLoader(otherApi).matchesVendor, false);
+
+  const hosted = enabledReference();
+  hosted.HOSTED_URL = HOSTED;
+  assert.equal(fox.referenceLoader(hosted).matchesVendor, false);
+  assert.ok(fox.referenceLoader(hosted).reasons.includes("hosted_form_rejected"));
+  assert.equal(fox.isHostedForm(HOSTED), true);
+
+  ["261674", "1vd796", "586227", "232839", "549074", "298803", "684175"].forEach((blocked) => {
+    const config = enabledReference();
+    config.PUBLIC_FORM_ID = blocked;
+    assert.equal(fox.referenceLoader(config).matchesVendor, false, blocked);
   });
-  assert.equal(verdict.ok, true);
-  assert.equal(verdict.action, "https://sendfox.com/form/crmguideform1/publicfixture1");
-  assert.equal(verdict.scriptSrc, "https://sendfox.com/js/form.js");
-  const html = fox.legacyMarkup(verdict);
-  assert.match(html, /method="post"/);
-  assert.match(html, /class="sendfox-form"/);
-  assert.match(html, /name="email"/);
-  assert.match(html, /name="a_password"/);
-  assert.match(html, /src="https:\/\/sendfox\.com\/js\/form\.js"/);
-  assert.equal(html.includes("api.sendfox.com"), false);
 });
 
-test("invalid origin, protocol, and known wrong ids are rejected", () => {
-  const valid = { OFFER_REVIEWED: true, FORM_ID: "crmguideform1", PUBLIC_ID: "publicfixture1" };
-  assert.equal(fox.assess({ OFFER_REVIEWED: true, FORM_ID: "http://evil", PUBLIC_ID: "publicfixture1" }).ok, false);
-  assert.equal(fox.assess({ OFFER_REVIEWED: true, FORM_ID: "crmguideform1", PUBLIC_ID: "../etc" }).ok, false);
-  assert.equal(fox.assess(Object.assign({}, valid, { ACTION: "http://sendfox.com/form/crmguideform1/publicfixture1" })).ok, false);
-  assert.equal(fox.assess(Object.assign({}, valid, { ACTION: "https://evil.example/form/crmguideform1/publicfixture1" })).ok, false);
-  assert.equal(fox.assess(Object.assign({}, valid, { ACTION: "https://sendfox.com/form/crmguideform1/publicfixture1?x=1" })).ok, false);
-  ["261674", "1vd796", "586227", "232839", "549074"].forEach((blocked) => {
-    assert.equal(fox.assess({ OFFER_REVIEWED: true, FORM_ID: blocked, PUBLIC_ID: "publicfixture1" }).ok, false);
-    assert.equal(fox.assess({ OFFER_REVIEWED: true, FORM_ID: "crmguideform1", PUBLIC_ID: blocked }).ok, false);
-  });
-  const shipped = read("index.html") + read("js/config.js") + read("js/main.js");
-  assert.equal(shipped.includes("https://sendfox.com/js/form.js"), false);
-  assert.equal(shipped.includes("https://sendfox.com/form/"), false);
-});
-
-test("pages do not carry secrets, the private guide, or the old backend", () => {
-  const blob = PAGES.map(read).join("\n");
+test("pages do not carry a vendor tag, hosted form, secrets, or the old backend", () => {
+  const html = read("index.html") + read("thank-you.html") + read("privacy.html") + read("js/main.js");
+  assert.equal(/<script[^>]+src=["']https?:\/\//i.test(html), false);
+  assert.equal(/<iframe\b/i.test(html), false);
+  assert.equal(html.includes("cdn.sendfox.com"), false);
+  assert.equal(html.includes("sendfox.com/js/form.js"), false);
+  assert.equal(html.includes("sendfox.com/form/"), false);
+  assert.equal(html.includes("mnn70x"), false);
+  assert.equal(html.includes(HOSTED), false);
+  const blob = PAGES.concat(["js/config.js", "js/sendfox.js"]).map(read).join("\n");
   [
     "1508Lh4WrwEcHKeFOx0RFm_cOSwbiHEgh",
     "drive.google.com",
@@ -77,9 +118,11 @@ test("pages do not carry secrets, the private guide, or the old backend", () => 
     assert.equal(blob.includes(needle), false, needle);
   });
   assert.equal(fs.existsSync(path.join(root, "server")), false);
+  assert.equal(read("js/main.js").includes("createElement"), false);
+  assert.equal(read("js/main.js").includes("fetch("), false);
 });
 
-test("landing copy, accessibility, and relative paths stay intact", () => {
+test("landing copy, order, and accessibility stay intact", () => {
   const html = read("index.html");
   assert.equal((html.match(/<h1\b/g) || []).length, 1);
   assert.match(html, /Generator service shop owners: find overlooked follow-up work in your CRM\./);
@@ -88,10 +131,14 @@ test("landing copy, accessibility, and relative paths stay intact", () => {
   assert.match(html, /Use the scripts/);
   assert.match(html, /Track follow-up/);
   assert.match(html, /Roger Navarrette/);
+  assert.ok(html.indexOf('id="about-title"') < html.indexOf('id="get-guide"'));
+  assert.ok(html.indexOf('id="get-guide"') < html.indexOf('id="privacy-title"'));
   assert.match(html, /<label for="work-email">Work email<\/label>/);
-  assert.match(html, /aria-describedby="email-error form-notice"/);
-  assert.match(html, /role="alert"/);
+  assert.match(html, /id="work-email"[^>]*disabled/);
+  assert.match(html, /aria-describedby="form-status"/);
   assert.match(html, /aria-live="polite"/);
+  assert.match(html, /type="button"/);
+  assert.equal(/<form\b/i.test(html), false);
   assert.match(html, /href="css\/styles\.css"/);
   assert.match(html, /href="privacy\.html"/);
   assert.match(html, /href="thank-you\.html"/);
@@ -99,32 +146,21 @@ test("landing copy, accessibility, and relative paths stay intact", () => {
   assert.match(read("css/styles.css"), /#F7F6F3/);
   assert.match(read("css/styles.css"), /#1F4B3A/);
   assert.match(read("css/styles.css"), /min-height:\s*44px/);
+  assert.match(read("css/styles.css"), /prefers-reduced-motion/);
 });
 
-test("thank-you and privacy do not claim delivery or a sheet download", () => {
+test("thank-you and privacy do not claim delivery", () => {
   const thanks = read("thank-you.html");
   const privacy = read("privacy.html");
-  assert.match(thanks, /does not confirm that an email was sent/);
+  const sentence = fox.NOT_READY;
+  assert.match(thanks, /No information has been submitted and no email has been sent/);
   assert.match(thanks, /does not say a PDF was attached/);
   assert.match(thanks, /Want help putting this into practice\? Choose guided setup or done-for-you implementation\./);
   assert.equal(thanks.includes("Your Customer Recovery guide is ready"), false);
-  assert.equal(thanks.includes("Google Sheet"), false);
-  assert.match(privacy, /does not send your address to SendFox/);
+  assert.equal(thanks.includes("signup was successful"), false);
+  assert.match(privacy, /No information has been submitted and no email has been sent/);
   assert.match(privacy, /A public delivery link is not configured/);
   assert.match(privacy, /A deletion contact is not published/);
   assert.equal(privacy.includes("@"), false);
-  assert.equal(fox.isValidEmail(""), false);
-  assert.equal(fox.isValidEmail("not-an-email"), false);
-  assert.equal(fox.isValidEmail("you@yourshop.com"), true);
-  assert.equal(fox.NOT_READY.includes("Nothing was sent"), true);
-});
-
-test("main.js does not invent a local success redirect", () => {
-  const main = read("js/main.js");
-  assert.match(main, /preventDefault/);
-  assert.match(main, /NOT_READY/);
-  assert.equal(main.includes("thank-you.html"), false);
-  assert.equal(main.includes("localStorage"), false);
-  assert.equal(main.includes("sessionStorage"), false);
-  assert.equal(main.includes("emailed you"), false);
+  assert.equal(sentence, "Signup and guide delivery are not available yet. No information has been submitted and no email has been sent.");
 });

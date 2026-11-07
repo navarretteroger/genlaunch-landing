@@ -11,7 +11,7 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
   <div class="preview-banner top-banner" role="status">
-    Signup is not ready. This page does not send your email to SendFox, and it does not email the guide.
+    Signup and guide delivery are not available yet. No information has been submitted and no email has been sent.
   </div>
   <header class="site-header">
     <p class="eyebrow">Free guide for independent generator service shops</p>
@@ -77,27 +77,18 @@
     <section aria-labelledby="form-title" id="get-guide">
       <h2 id="form-title">Get the free Customer Recovery guide</h2>
       <div class="form-panel">
-        <p class="lead">Enter your work email. When a reviewed SendFox form for this guide is connected, SendFox can email a link to the guide. That connection is not in place. This page does not send your email, and it does not confirm that a message was delivered.</p>
-        <form id="guide-form" method="post" action="#get-guide" novalidate data-testid="guide-form">
-          <div class="field">
-            <label for="work-email">Work email</label>
-            <input id="work-email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="you@yourshop.com" required aria-describedby="email-error form-notice" />
-            <p class="field-error" id="email-error" role="alert"></p>
-          </div>
-          <div class="hp-field" aria-hidden="true">
-            <label for="a-password">Leave blank</label>
-            <input id="a-password" name="a_password" type="text" tabindex="-1" value="" autocomplete="off" />
-          </div>
-          <button type="submit" class="btn btn-primary" data-cta="primary">Get the free Customer Recovery guide.</button>
-          <p class="form-notice" id="form-notice">Nothing is sent until Roger approves a current Customer Recovery SendFox form. Local checks only look at the email format.</p>
-          <div class="form-status" id="form-status" role="status" aria-live="polite" hidden></div>
-        </form>
+        <p class="lead" id="form-status" role="status" aria-live="polite">Signup and guide delivery are not available yet. No information has been submitted and no email has been sent.</p>
+        <div class="field">
+          <label for="work-email">Work email</label>
+          <input id="work-email" type="email" autocomplete="email" inputmode="email" placeholder="you@yourshop.com" disabled aria-disabled="true" aria-describedby="form-status" />
+        </div>
+        <button type="button" class="btn btn-primary" id="guide-cta" aria-describedby="form-status">Get the free Customer Recovery guide.</button>
       </div>
     </section>
     <section class="privacy-notice" id="privacy" aria-labelledby="privacy-title">
       <h2 id="privacy-title">Privacy notice</h2>
-      <p>This page is not collecting email addresses. The signup control does not send your address to SendFox, and it does not email the guide.</p>
-      <p>When Roger connects a reviewed SendFox form for this guide, the address you submit is stored and processed by SendFox so SendFox can send the guide message. That message is intended to carry a link to the guide, not a claim that a file is already attached. SendFox may ask you to confirm the address before it sends. None of that is turned on here.</p>
+      <p>Signup and guide delivery are not available yet. No information has been submitted and no email has been sent.</p>
+      <p>This page does not send an address to SendFox. It does not load the signup embed, and it does not email the guide.</p>
       <p>This form does not add a separate marketing permission. There is no paid checkout on this page.</p>
       <p>The guide file is not published on this site. A public delivery link is not configured, so this page cannot promise that a later email contains a working link.</p>
       <p>A deletion contact is not published on this page. This page does not invent one.</p>
