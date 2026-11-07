@@ -517,12 +517,13 @@ body.privacy-doc { background: var(--light-bg); color: var(--light-text); }
 .page-scroll { display: contents; }
 .sticky-cta { display: none; }
 @media (max-width: 767px) {
-  body {
+  body:has(.page-scroll) {
     height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
   }
+  body.dialog-open .page-scroll { overflow: hidden; }
   .page-scroll {
     display: block;
     flex: 1 1 auto;
