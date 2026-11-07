@@ -29,6 +29,17 @@ function evaluateOwnerPicks(picks, expected) {
   return { ok: true, reason: "selected_files", revokesProviderGrant: false };
 }
 
+function decidePickerSave(verdict) {
+  if (!verdict || verdict.ok !== true) {
+    return {
+      save: false,
+      revokesProviderGrant: false,
+      error: verdict && verdict.reason ? verdict.reason : "picked_files_do_not_match",
+    };
+  }
+  return { save: true, revokesProviderGrant: false };
+}
+
 function renderPickerPage() {
   return `<!doctype html>
 <html lang="en">
@@ -85,7 +96,7 @@ function renderPickerPage() {
             .then(function (result) {
               document.getElementById("status").textContent = result.ok
                 ? "Those files were authorized for this app. You can close this window. The refresh token was written only to the file you chose."
-                : "The picked files were not the confirmed signup sheet and guide. Pick those two files. Nothing was shared with another account.";
+                : "The selection was not saved. This page does not revoke access Google may already have granted.";
             });
         });
       });
@@ -97,5 +108,6 @@ function renderPickerPage() {
 module.exports = {
   expectedOwnerFiles,
   evaluateOwnerPicks,
+  decidePickerSave,
   renderPickerPage,
 };

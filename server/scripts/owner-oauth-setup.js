@@ -14,7 +14,7 @@ const path = require("path");
 const { OWNER_ACCOUNT } = require("../src/config");
 const { REDIRECT_PORT, REDIRECT_URI, createPkce, buildConsentUrl, assertTokenOutputPath } = require("../src/oauthSetup");
 const { loadConfig } = require("../src/config");
-const { expectedOwnerFiles, evaluateOwnerPicks, renderPickerPage } = require("../src/pickerGrant");
+const { expectedOwnerFiles, evaluateOwnerPicks, decidePickerSave, renderPickerPage } = require("../src/pickerGrant");
 const { assessTokenGrant } = require("../src/selectedFiles");
 
 const command = process.argv[2];
@@ -96,11 +96,16 @@ function exchange() {
         picks = {};
       }
       const verdict = evaluateOwnerPicks(picks, expectedFiles);
+      const decision = decidePickerSave(verdict);
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.setHeader("Cache-Control", "no-store");
-      if (!verdict.ok || !granted) {
+      if (!decision.save || !granted) {
         res.statusCode = 409;
-        res.end(JSON.stringify({ ok: false, error: "picked_files_do_not_match" }));
+        res.end(JSON.stringify({
+          ok: false,
+          error: decision.error,
+          revokesProviderGrant: false,
+        }));
         console.error("Selection was not saved. Cancelling or picking a different file does not revoke access Google may already have granted. This program does not revoke account grants.");
         return;
       }

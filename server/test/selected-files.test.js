@@ -7,7 +7,7 @@ const { buildConsentUrl, createPkce } = require("../src/oauthSetup");
 const { OwnerOAuth } = require("../src/oauth");
 const { createDriveClient } = require("../src/drive");
 const { createSheetsClient } = require("../src/sheets");
-const { evaluateOwnerPicks } = require("../src/pickerGrant");
+const { evaluateOwnerPicks, decidePickerSave } = require("../src/pickerGrant");
 const {
   FILE_SCOPED_OAUTH_SCOPE,
   SELECTED_SPREADSHEET_ID,
@@ -90,6 +90,16 @@ test("environment cannot widen scopes or retarget the selected files", () => {
   );
 });
 
+test("empty PDF config is refused while the spreadsheet id stays selected", () => {
+  assert.throws(
+    () => loadConfig(configuredEnv({ DRIVE_FILE_ID: "" })),
+    (err) => err.code === "selected_file_override_refused"
+  );
+  const sheetOnly = loadConfig(configuredEnv({ GOOGLE_SHEET_ID: SELECTED_SPREADSHEET_ID }));
+  assert.equal(sheetOnly.sheetId, SELECTED_SPREADSHEET_ID);
+  assert.equal(sheetOnly.driveFileId, SELECTED_PDF_FILE_ID);
+});
+
 test("returned token scope must be exactly drive.file or the token is refused", () => {
   assert.equal(assessTokenGrant({ scope: FILE_SCOPED_OAUTH_SCOPE }).ok, true);
   [
@@ -138,26 +148,95 @@ test("refresh does not use an omitted or broader returned scope", async () => {
   assert.equal(exact.ok, true);
 });
 
-test("runtime clients do not call Google for a non-selected file", async () => {
-  const base = loadConfig(configuredEnv());
+async function expectZeroGoogleCalls(makeClient, invoke) {
   let calls = 0;
   const fetchImpl = async () => {
     calls += 1;
-    return jsonResponse(200, {});
+    return jsonResponse(200, { access_token: "should-not-be-requested", scope: FILE_SCOPED_OAUTH_SCOPE });
   };
-  const drive = createDriveClient({
-    config: Object.assign({}, base, { driveFileId: "different-pdf" }),
-    fetchImpl,
-    now: () => 10_000,
-  });
-  await assert.rejects(() => drive.openConfiguredPdf(), (err) => err.code === "selected_file_override_refused");
-  const sheets = createSheetsClient({
-    config: Object.assign({}, base, { sheetId: null }),
-    fetchImpl,
-    now: () => 10_000,
-  });
-  await assert.rejects(() => sheets.findEmail("a@b.co"), (err) => err.code === "selected_file_override_refused");
+  const client = makeClient(fetchImpl);
+  await assert.rejects(invoke(client), (err) => err.code === "selected_file_override_refused");
   assert.equal(calls, 0);
+}
+
+test("drive client makes no token or API call for a wrong PDF id", async () => {
+  const base = loadConfig(configuredEnv());
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createDriveClient({
+      config: Object.assign({}, base, { driveFileId: "different-pdf" }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.openConfiguredPdf()
+  );
+});
+
+test("drive client makes no token or API call for a null PDF id", async () => {
+  const base = loadConfig(configuredEnv());
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createDriveClient({
+      config: Object.assign({}, base, { driveFileId: null }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.openConfiguredPdf()
+  );
+});
+
+test("drive client makes no token or API call for an empty PDF id", async () => {
+  const base = loadConfig(configuredEnv());
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createDriveClient({
+      config: Object.assign({}, base, { driveFileId: "" }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.openConfiguredPdf()
+  );
+});
+
+test("sheets client makes no token or API call for a wrong spreadsheet id", async () => {
+  const base = loadConfig(configuredEnv());
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createSheetsClient({
+      config: Object.assign({}, base, { sheetId: "different-sheet" }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.findEmail("a@b.co")
+  );
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createSheetsClient({
+      config: Object.assign({}, base, { sheetId: "different-sheet" }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.append({ email: "a@b.co" })
+  );
+});
+
+test("sheets client makes no token or API call for a null spreadsheet id", async () => {
+  const base = loadConfig(configuredEnv());
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createSheetsClient({
+      config: Object.assign({}, base, { sheetId: null }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.findEmail("a@b.co")
+  );
+});
+
+test("sheets client makes no token or API call for an empty spreadsheet id", async () => {
+  const base = loadConfig(configuredEnv());
+  await expectZeroGoogleCalls(
+    (fetchImpl) => createSheetsClient({
+      config: Object.assign({}, base, { sheetId: "" }),
+      fetchImpl,
+      now: () => 10_000,
+    }),
+    (client) => client.findEmail("a@b.co")
+  );
 });
 
 test("cancelled and mismatched picks are not accepted and do not revoke grants", () => {
@@ -167,14 +246,37 @@ test("cancelled and mismatched picks are not accepted and do not revoke grants",
     assert.equal(verdict.reason, "pick_cancelled");
     assert.equal(verdict.revokesProviderGrant, false);
   });
-  const mismatch = evaluateOwnerPicks({
+  const sheetMismatch = evaluateOwnerPicks({
     spreadsheetId: "other-sheet",
     pdfFileId: SELECTED_PDF_FILE_ID,
   }, EXPECTED);
-  assert.equal(mismatch.ok, false);
-  assert.equal(mismatch.reason, "picked_files_do_not_match");
-  assert.equal(mismatch.revokesProviderGrant, false);
+  assert.equal(sheetMismatch.ok, false);
+  assert.equal(sheetMismatch.reason, "picked_files_do_not_match");
+  assert.equal(decidePickerSave(sheetMismatch).save, false);
+  assert.equal(decidePickerSave(sheetMismatch).revokesProviderGrant, false);
+  const pdfMismatch = evaluateOwnerPicks({
+    spreadsheetId: SELECTED_SPREADSHEET_ID,
+    pdfFileId: "other-pdf",
+  }, EXPECTED);
+  assert.equal(pdfMismatch.ok, false);
+  assert.equal(pdfMismatch.reason, "picked_files_do_not_match");
+  assert.equal(decidePickerSave(pdfMismatch).save, false);
+  assert.equal(decidePickerSave(pdfMismatch).revokesProviderGrant, false);
+  [
+    { spreadsheetId: SELECTED_SPREADSHEET_ID, pdfFileId: null },
+    { spreadsheetId: SELECTED_SPREADSHEET_ID, pdfFileId: "" },
+    { spreadsheetId: SELECTED_SPREADSHEET_ID },
+  ].forEach((picks) => {
+    const verdict = evaluateOwnerPicks(picks, EXPECTED);
+    const decision = decidePickerSave(verdict);
+    assert.equal(verdict.ok, false);
+    assert.equal(verdict.reason, "pick_cancelled");
+    assert.equal(decision.save, false);
+    assert.equal(decision.revokesProviderGrant, false);
+  });
   const match = evaluateOwnerPicks(EXPECTED, EXPECTED);
+  const saved = decidePickerSave(match);
   assert.equal(match.ok, true);
-  assert.equal(match.revokesProviderGrant, false);
+  assert.equal(saved.save, true);
+  assert.equal(saved.revokesProviderGrant, false);
 });
