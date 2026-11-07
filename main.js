@@ -1,7 +1,7 @@
 /* GenLaunch Customer Recovery Guide landing page.
    Email capture is the SendFox embed (form 1xvkdn) inside the signup pop-up.
-   This script only opens and closes the pop-up and shows a notice if the
-   SendFox form fails to load. It sends nothing itself. */
+   The official SendFox loader is added when the pop-up opens.
+   This script does not send the form. */
 (function () {
   "use strict";
 
@@ -11,6 +11,7 @@
   var embed = document.getElementById("sendfox-guide-embed");
   var fallback = document.getElementById("sendfox-fallback");
   var opener = null;
+  var embedStarted = false;
 
   /* ---------- Dialog ---------- */
   var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
@@ -40,6 +41,7 @@
     }
     document.body.classList.add("dialog-open");
     setPageInert(true);
+    startEmbed();
     window.setTimeout(focusFirstField, 10);
   }
 
@@ -137,7 +139,32 @@
   function checkEmbed() {
     if (fallback) fallback.hidden = embedRendered();
   }
-  window.addEventListener("load", function () { window.setTimeout(checkEmbed, 6000); });
+  function startEmbed() {
+    if (embedStarted || !embed) return;
+    embedStarted = true;
+    if (fallback) {
+      fallback.hidden = false;
+      fallback.textContent = "The signup form is loading.";
+    }
+    var script = document.createElement("script");
+    script.src = "https://cdn.sendfox.com/js/embed.js";
+    script.async = true;
+    script.setAttribute("data-form", "1xvkdn");
+    script.setAttribute("data-api", "https://sendfox.com");
+    script.addEventListener("error", function () {
+      if (fallback) {
+        fallback.hidden = false;
+        fallback.textContent = "The signup form didn't load. Please refresh the page and try again.";
+      }
+    });
+    embed.appendChild(script);
+    window.setTimeout(function () {
+      if (!embedRendered() && fallback) {
+        fallback.hidden = false;
+        fallback.textContent = "The signup form didn't load. Please refresh the page and try again.";
+      }
+    }, 8000);
+  }
   if (embed && "MutationObserver" in window) {
     new MutationObserver(checkEmbed).observe(embed, { childList: true, subtree: true });
   }

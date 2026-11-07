@@ -17,6 +17,7 @@
 <body data-delivery-mode="sendfox">
 <a class="skip-link" href="#main">Skip to content</a>
 <div class="grain" aria-hidden="true"></div>
+<div class="page-scroll">
 
 <!-- Floating navigation -->
 <header class="nav-wrap">
@@ -177,6 +178,7 @@
     <p class="footer-legal"><a href="privacy.html">Privacy</a></p>
   </div>
 </footer>
+</div>
 
 <!-- Sticky mobile CTA -->
 <div class="sticky-cta" id="sticky-cta">
@@ -193,11 +195,8 @@
     <p class="dialog-kicker">Free guide</p>
     <h2 id="dialog-title">Get the free Customer Recovery guide</h2>
     <p class="dialog-helper" id="dialog-helper">Enter your work email to get the guide. Email only, no phone number.</p>
-    <!-- SendFox embed, vendor snippet copied verbatim (form 1xvkdn, list "GenLaunch - Customer Recovery Guide").
-         It only shows on a website domain that is allowed in SendFox's form settings. -->
-    <div class="sf-embed" id="sendfox-guide-embed">
-      <script src="https://cdn.sendfox.com/js/embed.js" data-form="1xvkdn" data-api="https://sendfox.com" async></script>
-    </div>
+    <!-- Official loader is inserted when this dialog opens: cdn.sendfox.com/js/embed.js, data-form 1xvkdn, data-api https://sendfox.com. -->
+    <div class="sf-embed" id="sendfox-guide-embed"></div>
     <p class="sf-fallback" id="sendfox-fallback" role="status" hidden>The signup form didn't load. Please refresh the page and try again.</p>
     <p class="dialog-privacy">Your email goes to SendFox for the guide list only. <a href="privacy.html">Privacy notice</a></p>
   </div>
