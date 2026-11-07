@@ -61,13 +61,20 @@ test("the page has no secrets, private guide, or backend", () => {
 });
 
 test("copy does not treat a form response as guide delivery", () => {
-  assert.match(html, /This page does not show whether the guide was emailed/);
+  assert.match(html, /Guide email stays blocked until SendFox permits sending/);
   assert.match(html, /That is not a guide email/);
-  assert.match(html, /Guide delivery is not set up on this website/);
+  assert.match(html, /opened a message in the last 90 days/);
+  assert.match(html, /This page does not turn that limit off/);
+  assert.match(html, /Invisible reCAPTCHA stays on/);
   assert.match(html, /Google invisible reCAPTCHA/);
   assert.match(html, /Poppins font from Google Fonts/);
   assert.match(html, /No deletion contact is published/);
+  assert.match(read("README.md"), /deliverability review is pending/);
   assert.equal(html.includes("to get the guide"), false);
+  assert.equal(html.includes("data-recaptcha=\"false\""), false);
+  assert.equal(js.includes("3103777"), false);
+  assert.equal(html.includes("3103777"), false);
+  assert.equal(read("README.md").includes("3103777"), false);
   assert.equal(html.includes("Full privacy details will be linked"), false);
   assert.match(html, /Get the free Customer Recovery guide\./);
   assert.match(html, /Generator service shop owners: find overlooked follow-up work in your CRM\./);

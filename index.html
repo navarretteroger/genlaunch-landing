@@ -142,7 +142,7 @@
     <div class="container">
       <div class="signup-panel reveal">
         <h2 id="signup-title">Get the free Customer Recovery guide</h2>
-        <p class="signup-sub">One field: your work email. No phone number, no qualifying questions.</p>
+        <p class="signup-sub">One field: your work email. No phone number, no qualifying questions. SendFox is not sending this guide yet.</p>
         <button type="button" class="btn btn-lg" data-open-guide-dialog>Get the free Customer Recovery guide.</button>
         <!--
           SIGNUP INTEGRATION: SendFox form "GenLaunch - Customer Recovery Guide" (public ID 1xvkdn).
@@ -160,7 +160,7 @@
       <h2 id="privacy-title">Privacy</h2>
       <p>Opening the signup control loads the SendFox form for this guide. The form asks for an email address and does not add a separate promotions checkbox. Submitting it sends that address to SendFox. SendFox runs Google invisible reCAPTCHA on that submit.</p>
       <p>This page also loads the Poppins font from Google Fonts. SendFox's script may store a small flag in this browser if the form is dismissed or accepted.</p>
-      <p>A signup-success message is SendFox's response. It does not mean the guide was emailed. Guide delivery is not set up on this website, and the guide file is not published here. No deletion contact is published on this page.</p>
+      <p>A signup-success message is SendFox's response. It does not mean the guide was emailed. SendFox currently limits this account to subscribers who opened a message in the last 90 days, while a deliverability review is pending. This page does not turn that limit off. The guide file is not published here. No deletion contact is published on this page.</p>
     </div>
   </section>
 
@@ -191,11 +191,11 @@
     </button>
     <p class="dialog-kicker">Free guide</p>
     <h2 id="dialog-title">Get the free Customer Recovery guide</h2>
-    <p class="dialog-helper" id="dialog-helper">Enter your work email. SendFox receives that address. This page does not show whether the guide was emailed.</p>
+    <p class="dialog-helper" id="dialog-helper">Enter your work email. SendFox receives that address. Guide email stays blocked until SendFox permits sending.</p>
     <!-- Official loader is inserted by main.js on open: cdn.sendfox.com/js/embed.js, data-form 1xvkdn, data-api https://sendfox.com. -->
     <div class="sf-embed" id="sendfox-guide-embed"></div>
     <p class="sf-fallback" id="sendfox-fallback" role="status" hidden>The signup form is loading.</p>
-    <p class="dialog-privacy">If SendFox accepts the address, its message says the signup was successful. That is not a guide email. <a href="#privacy" data-privacy-link>Privacy details</a></p>
+    <p class="dialog-privacy">If SendFox accepts the address, its message says the signup was successful. That is not a guide email. Invisible reCAPTCHA stays on. <a href="#privacy" data-privacy-link>Privacy details</a></p>
   </div>
 </dialog>
 
