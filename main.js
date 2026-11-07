@@ -1,7 +1,6 @@
 /* GenLaunch Customer Recovery Guide landing page.
-   Email capture is the SendFox embed (form 1xvkdn) inside the signup pop-up.
-   This script only opens and closes the pop-up and shows a notice if the
-   SendFox form fails to load. It sends nothing itself. */
+   The official SendFox loader for form 1xvkdn is added when the pop-up opens.
+   This script does not send the form and does not include an API key. */
 (function () {
   "use strict";
 
@@ -11,6 +10,13 @@
   var embed = document.getElementById("sendfox-guide-embed");
   var fallback = document.getElementById("sendfox-fallback");
   var opener = null;
+  var embedStarted = false;
+  var focusedEmail = false;
+  var FORM_ID = "1xvkdn";
+  var LOADER_SRC = "https://cdn.sendfox.com/js/embed.js";
+  var API_ORIGIN = "https://sendfox.com";
+  var sawSignupForm = false;
+  var guideRevealed = false;
 
   /* ---------- Dialog ---------- */
   var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
@@ -40,14 +46,29 @@
     }
     document.body.classList.add("dialog-open");
     setPageInert(true);
+    startEmbed();
     window.setTimeout(focusFirstField, 10);
   }
 
   // Focus the SendFox email field if it rendered, otherwise the Close button.
   function focusFirstField() {
+    if (guideRevealed) {
+      var readyLink = document.getElementById("guide-download-dialog");
+      if (readyLink) {
+        readyLink.focus();
+        return;
+      }
+    }
     var field = embed && embed.querySelector('input[type="email"]');
-    if (!field) field = dialog.querySelector("[data-close-guide-dialog]");
-    if (field) field.focus();
+    if (field) {
+      if (!focusedEmail) {
+        focusedEmail = true;
+        field.focus();
+      }
+      return;
+    }
+    var closeBtn = dialog && dialog.querySelector("[data-close-guide-dialog]");
+    if (closeBtn) closeBtn.focus();
   }
 
   function closeDialog() {
@@ -60,6 +81,7 @@
   }
 
   function onClosed() {
+    focusedEmail = false;
     document.body.classList.remove("dialog-open");
     setPageInert(false);
     if (opener && typeof opener.focus === "function" && document.contains(opener)) {
@@ -125,21 +147,78 @@
     }
   }
 
-  /* ---------- SendFox embed check ---------- */
-  // SendFox only renders the form on a domain allowed in its form settings.
-  // If nothing has rendered a few seconds after load, say so honestly.
+  /* ---------- SendFox embed ---------- */
+  // The loader is the official snippet. It is added after the dialog is open
+  // so the page does not contact SendFox before the visitor asks for the form.
+  // This file does not post the form and cannot change a provider 422.
   function embedRendered() {
     if (!embed) return false;
     return Array.prototype.some.call(embed.children, function (el) {
       return el.tagName !== "SCRIPT";
     });
   }
-  function checkEmbed() {
-    if (fallback) fallback.hidden = embedRendered();
+  function showFallback(text) {
+    if (!fallback) return;
+    fallback.hidden = false;
+    fallback.textContent = text;
   }
-  window.addEventListener("load", function () { window.setTimeout(checkEmbed, 6000); });
+  function checkEmbed() {
+    if (!embedStarted || !embedRendered()) return;
+    if (fallback) fallback.hidden = true;
+    focusFirstField();
+  }
+  function storageConfirms() {
+    try {
+      return window.localStorage.getItem("sendfox_form_done_" + FORM_ID) === "1";
+    } catch (err) {
+      return null;
+    }
+  }
+  function considerGuide() {
+    if (guideRevealed || !embed || !embed.querySelector) return;
+    var card = embed.querySelector(".sendfox-embed-card");
+    if (!card || !card.querySelector) return;
+    if (card.querySelector("form")) {
+      sawSignupForm = true;
+      return;
+    }
+    if (card.querySelector(".sendfox-embed-error")) return;
+    var text = String(card.textContent || "").replace(/\s+/g, " ").trim();
+    if (!sawSignupForm || !text) return;
+    if (storageConfirms() === false) return;
+    guideRevealed = true;
+    ["guide-ready", "guide-ready-dialog"].forEach(function (id) {
+      var panel = document.getElementById(id);
+      if (panel) panel.hidden = false;
+    });
+    var download = dialog && dialog.open ? document.getElementById("guide-download-dialog") : null;
+    if (!download) download = document.getElementById("guide-download");
+    if (download && download.focus) download.focus();
+  }
+  function onEmbedChange() {
+    checkEmbed();
+    considerGuide();
+  }
+  function markEmbedFailed() {
+    if (!embedRendered()) {
+      showFallback("The signup form didn't load. Please refresh the page and try again.");
+    }
+  }
+  function startEmbed() {
+    if (embedStarted || !embed) return;
+    embedStarted = true;
+    showFallback("The signup form is loading.");
+    var script = document.createElement("script");
+    script.src = LOADER_SRC;
+    script.async = true;
+    script.setAttribute("data-form", FORM_ID);
+    script.setAttribute("data-api", API_ORIGIN);
+    script.addEventListener("error", markEmbedFailed);
+    embed.appendChild(script);
+    window.setTimeout(markEmbedFailed, 8000);
+  }
   if (embed && "MutationObserver" in window) {
-    new MutationObserver(checkEmbed).observe(embed, { childList: true, subtree: true });
+    new MutationObserver(onEmbedChange).observe(embed, { childList: true, subtree: true });
   }
 
   /* ---------- Nav morph ---------- */

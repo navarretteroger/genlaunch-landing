@@ -142,11 +142,18 @@
     <div class="container">
       <div class="signup-panel reveal">
         <h2 id="signup-title">Get the free Customer Recovery guide</h2>
-        <p class="signup-sub">One field: your work email. No phone number, no qualifying questions.</p>
+        <p class="signup-sub">One field: your work email. No phone number, no qualifying questions. The guide download appears here after SendFox accepts the signup.</p>
         <button type="button" class="btn btn-lg" data-open-guide-dialog>Get the free Customer Recovery guide.</button>
+        <section class="guide-ready" id="guide-ready" hidden aria-labelledby="guide-ready-title">
+          <h3 id="guide-ready-title">The guide is ready on this page</h3>
+          <p>Download it here. Confirming your email is not required for this download.</p>
+          <a class="btn btn-lg" id="guide-download" href="https://drive.google.com/uc?export=download&amp;id=10TYZ6g7IpG6RYvpz2dKq9E43R8jqxzWb">Download the guide</a>
+          <a class="guide-view" id="guide-view" href="https://drive.google.com/file/d/10TYZ6g7IpG6RYvpz2dKq9E43R8jqxzWb/view?usp=drivesdk" target="_blank" rel="noopener noreferrer">View the guide</a>
+          <p>Check your inbox and confirm your email for the emailed copy. This page does not claim that message has already arrived.</p>
+        </section>
         <!--
           SIGNUP INTEGRATION: SendFox form "GenLaunch - Customer Recovery Guide" (public ID 1xvkdn).
-          The form itself lives in the signup pop-up below, so the page loads it once.
+          main.js inserts the official embed.js snippet when this pop-up opens.
           Do NOT swap in the Lease newsletter form (1vd796), the older healthcare SmartPage
           form, or the paid Client Intake form.
         -->
@@ -158,8 +165,9 @@
   <section class="privacy" id="privacy" aria-labelledby="privacy-title">
     <div class="container privacy-inner">
       <h2 id="privacy-title">Privacy</h2>
-      <p>When you sign up, your email goes to SendFox, the email service we use for the Customer Recovery guide list. We only ask for your email.</p>
-      <p>Full privacy details will be linked here once they are approved.</p>
+      <p>Opening the signup control loads the SendFox form for this guide. The form asks for an email address and does not add a separate promotions checkbox. Submitting it sends that address to SendFox. SendFox runs Google invisible reCAPTCHA on that submit.</p>
+      <p>This page also loads the Poppins font from Google Fonts. SendFox's script may store a small flag in this browser if the form is dismissed or accepted.</p>
+      <p>After SendFox accepts the signup, this page shows a download for the public guide. Check your inbox and confirm your email for the emailed copy. This page does not claim that message has already arrived. No deletion contact is published on this page.</p>
     </div>
   </section>
 
@@ -190,14 +198,18 @@
     </button>
     <p class="dialog-kicker">Free guide</p>
     <h2 id="dialog-title">Get the free Customer Recovery guide</h2>
-    <p class="dialog-helper" id="dialog-helper">Enter your work email to get the guide. Email only, no phone number.</p>
-    <!-- SendFox embed, vendor snippet copied verbatim (form 1xvkdn, list "GenLaunch - Customer Recovery Guide").
-         It only shows on a website domain that is allowed in SendFox's form settings. -->
-    <div class="sf-embed" id="sendfox-guide-embed">
-      <script src="https://cdn.sendfox.com/js/embed.js" data-form="1xvkdn" data-api="https://sendfox.com" async></script>
-    </div>
-    <p class="sf-fallback" id="sendfox-fallback" role="status" hidden>The signup form didn't load. Please refresh the page and try again.</p>
-    <p class="dialog-privacy">Your email goes to SendFox for the guide list only. <a href="#privacy" data-privacy-link>Privacy details</a></p>
+    <p class="dialog-helper" id="dialog-helper">Enter your work email. SendFox receives that address. The download appears here after SendFox accepts the signup.</p>
+    <!-- Official loader is inserted by main.js on open: cdn.sendfox.com/js/embed.js, data-form 1xvkdn, data-api https://sendfox.com. -->
+    <div class="sf-embed" id="sendfox-guide-embed"></div>
+    <p class="sf-fallback" id="sendfox-fallback" role="status" hidden>The signup form is loading.</p>
+    <section class="guide-ready" id="guide-ready-dialog" hidden aria-labelledby="guide-ready-dialog-title">
+      <h3 id="guide-ready-dialog-title">The guide is ready on this page</h3>
+      <p>Download it here. Confirming your email is not required for this download.</p>
+      <a class="btn btn-lg" id="guide-download-dialog" href="https://drive.google.com/uc?export=download&amp;id=10TYZ6g7IpG6RYvpz2dKq9E43R8jqxzWb">Download the guide</a>
+      <a class="guide-view" href="https://drive.google.com/file/d/10TYZ6g7IpG6RYvpz2dKq9E43R8jqxzWb/view?usp=drivesdk" target="_blank" rel="noopener noreferrer">View the guide</a>
+      <p>Check your inbox and confirm your email for the emailed copy. This page does not claim that message has already arrived.</p>
+    </section>
+    <p class="dialog-privacy">Invisible reCAPTCHA stays on. <a href="#privacy" data-privacy-link>Privacy details</a></p>
   </div>
 </dialog>
 
