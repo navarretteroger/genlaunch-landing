@@ -280,3 +280,29 @@ test("cancelled and mismatched picks are not accepted and do not revoke grants",
   assert.equal(saved.save, true);
   assert.equal(saved.revokesProviderGrant, false);
 });
+
+test("empty sheet picker id is refused when the PDF id is the selected file", () => {
+  const verdict = evaluateOwnerPicks({
+    spreadsheetId: "",
+    pdfFileId: SELECTED_PDF_FILE_ID,
+  }, EXPECTED);
+  const decision = decidePickerSave(verdict);
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.reason, "pick_cancelled");
+  assert.equal(verdict.revokesProviderGrant, false);
+  assert.equal(decision.save, false);
+  assert.equal(decision.revokesProviderGrant, false);
+});
+
+test("omitted sheet picker id is refused when the PDF id is the selected file", () => {
+  const verdict = evaluateOwnerPicks({
+    pdfFileId: SELECTED_PDF_FILE_ID,
+  }, EXPECTED);
+  const decision = decidePickerSave(verdict);
+  assert.equal(verdict.ok, false);
+  assert.equal(verdict.reason, "pick_cancelled");
+  assert.equal(verdict.revokesProviderGrant, false);
+  assert.equal(decision.save, false);
+  assert.equal(decision.revokesProviderGrant, false);
+  assert.equal(Object.prototype.hasOwnProperty.call({ pdfFileId: SELECTED_PDF_FILE_ID }, "spreadsheetId"), false);
+});
