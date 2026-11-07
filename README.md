@@ -8,11 +8,11 @@ GenLaunch Customer Recovery guide landing page. Static HTML, CSS and JS, no buil
 
 Opening the pop-up inserts the official loader `https://cdn.sendfox.com/js/embed.js` with `data-form="1xvkdn"` and `data-api="https://sendfox.com"`. The page does not load that script on first view. It does not use `https://sendfox.com/js/form.js`, and it does not use the Lease or older healthcare forms.
 
-A SendFox message that the signup was successful is that form's response. It does not mean the guide was emailed. The guide file is not in this repository.
+The download stays hidden until the official SendFox loader shows its own success state. That loader posts the form itself. After an HTTP 200 with no redirect, it stores `sendfox_form_done_1xvkdn` and replaces the form card with its success message. This page reveals the download only after it has seen that form card and then seen the card lose the form, keep no error, and gain that message, with the stored flag agreeing when storage can be read. A button click, a validation block, a network error, or an error message does not reveal it.
 
-SendFox limits this account to subscribers who opened a message in the last 90 days, while a deliverability review is pending. This site does not turn that limit off, does not turn invisible reCAPTCHA off, and does not replace SendFox. Guide email stays blocked until SendFox permits it.
+The download link is the public Drive file `10TYZ6g7IpG6RYvpz2dKq9E43R8jqxzWb`. A request to `https://drive.google.com/uc?export=download&id=10TYZ6g7IpG6RYvpz2dKq9E43R8jqxzWb` returns 303 to `drive.usercontent.google.com`, which returns 200 `application/octet-stream` with `Content-Disposition: attachment` and the filename `Customer Recovery Guide — Simple Edition.pdf`. The view link returns `text/html`. The HTML `download` attribute is not used: browsers ignore it on a cross-origin address, so it would not decide the save. A `crossorigin` attribute on the link does not change that navigation. The file is not copied into this repository.
 
-Form 298803 now has `navarretteroger.github.io` saved as an allowed domain. The list is 684175. Invisible reCAPTCHA remains on. A missing domain was a plausible cause of HTTP 422 / SF05 and is not treated as proven here. No GenLaunch automation is running. The account home that loads is `/dashboard/grow`. A different dashboard path returned 404. No private guide link is stored here.
+Check-inbox copy is for the emailed copy and does not say the message has already arrived. Confirming the email does not gate the on-page download. Invisible reCAPTCHA stays on. This repository does not change SendFox, the form, the domain list, or automations. No private guide link is stored here.
 
 There is no API key in these files.
 

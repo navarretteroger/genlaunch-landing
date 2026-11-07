@@ -584,6 +584,28 @@ main, .footer { position: relative; z-index: 2; }
 }
 .sf-fallback[hidden] { display: none; }
 .dialog-privacy { margin-top: 1.5rem; color: var(--text-muted); font-size: 0.88rem; }
+.guide-ready {
+  margin-top: 1.25rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.guide-ready[hidden] { display: none !important; }
+.guide-ready h3 { font-size: 1.35rem; margin-bottom: 0.35rem; }
+.guide-ready p { color: var(--text-muted); margin-top: 0.75rem; }
+.guide-ready .btn {
+  width: 100%;
+  margin-top: 1rem;
+  text-align: center;
+}
+.guide-view {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3.25rem;
+  margin-top: 0.35rem;
+  font-weight: 700;
+}
 
 @media (max-width: 600px) {
   .guide-dialog {

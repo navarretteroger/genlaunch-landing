@@ -15,6 +15,8 @@
   var FORM_ID = "1xvkdn";
   var LOADER_SRC = "https://cdn.sendfox.com/js/embed.js";
   var API_ORIGIN = "https://sendfox.com";
+  var sawSignupForm = false;
+  var guideRevealed = false;
 
   /* ---------- Dialog ---------- */
   var FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]):not([tabindex="-1"]), select:not([disabled]), textarea:not([disabled]), iframe, [tabindex]:not([tabindex="-1"])';
@@ -50,6 +52,13 @@
 
   // Focus the SendFox email field if it rendered, otherwise the Close button.
   function focusFirstField() {
+    if (guideRevealed) {
+      var readyLink = document.getElementById("guide-download-dialog");
+      if (readyLink) {
+        readyLink.focus();
+        return;
+      }
+    }
     var field = embed && embed.querySelector('input[type="email"]');
     if (field) {
       if (!focusedEmail) {
@@ -158,6 +167,38 @@
     if (fallback) fallback.hidden = true;
     focusFirstField();
   }
+  function storageConfirms() {
+    try {
+      return window.localStorage.getItem("sendfox_form_done_" + FORM_ID) === "1";
+    } catch (err) {
+      return null;
+    }
+  }
+  function considerGuide() {
+    if (guideRevealed || !embed || !embed.querySelector) return;
+    var card = embed.querySelector(".sendfox-embed-card");
+    if (!card || !card.querySelector) return;
+    if (card.querySelector("form")) {
+      sawSignupForm = true;
+      return;
+    }
+    if (card.querySelector(".sendfox-embed-error")) return;
+    var text = String(card.textContent || "").replace(/\s+/g, " ").trim();
+    if (!sawSignupForm || !text) return;
+    if (storageConfirms() === false) return;
+    guideRevealed = true;
+    ["guide-ready", "guide-ready-dialog"].forEach(function (id) {
+      var panel = document.getElementById(id);
+      if (panel) panel.hidden = false;
+    });
+    var download = dialog && dialog.open ? document.getElementById("guide-download-dialog") : null;
+    if (!download) download = document.getElementById("guide-download");
+    if (download && download.focus) download.focus();
+  }
+  function onEmbedChange() {
+    checkEmbed();
+    considerGuide();
+  }
   function markEmbedFailed() {
     if (!embedRendered()) {
       showFallback("The signup form didn't load. Please refresh the page and try again.");
@@ -177,7 +218,7 @@
     window.setTimeout(markEmbedFailed, 8000);
   }
   if (embed && "MutationObserver" in window) {
-    new MutationObserver(checkEmbed).observe(embed, { childList: true, subtree: true });
+    new MutationObserver(onEmbedChange).observe(embed, { childList: true, subtree: true });
   }
 
   /* ---------- Nav morph ---------- */
