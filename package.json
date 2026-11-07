@@ -1,0 +1,11 @@
+{
+  "name": "genlaunch-landing",
+  "private": true,
+  "description": "Unpublished static Customer Recovery landing page. SendFox embed stays off until a reviewed current-offer form exists.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

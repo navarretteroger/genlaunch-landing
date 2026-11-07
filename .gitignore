@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.*
+*.pdf
+*.pem
+*.key
+*credentials*.json
+*service-account*
+*.tmp
