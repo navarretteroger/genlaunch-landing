@@ -149,7 +149,7 @@ main, .footer { position: relative; z-index: 2; }
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 0.55rem 0.55rem 0.55rem 1.4rem;
+  padding: 0.45rem;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: transparent;
@@ -168,6 +168,23 @@ main, .footer { position: relative; z-index: 2; }
   letter-spacing: -0.02em;
   color: var(--text);
   text-decoration: none;
+}
+.nav .brand {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-width: 0;
+  line-height: 0;
+  background: var(--light-bg);
+  border-radius: var(--radius-pill);
+  padding: 0.28rem 0.72rem 0.28rem 0.42rem;
+}
+.nav .brand img {
+  display: block;
+  height: 1.85rem;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
 }
 .brand span { color: var(--brand-soft); }
 .brand-lg { font-size: 1.6rem; }
