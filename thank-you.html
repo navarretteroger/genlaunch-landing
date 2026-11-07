@@ -7,62 +7,32 @@
   <meta name="robots" content="noindex, nofollow" />
   <link rel="stylesheet" href="css/styles.css" />
 </head>
-<body data-delivery-mode="preview">
+<body>
   <a class="skip-link" href="#main">Skip to content</a>
-
-  <div class="preview-banner top-banner" role="status" data-preview-only>
-    Preview mode — no capture, no download
+  <div class="preview-banner top-banner" role="status">
+    This page does not confirm that an email was sent.
   </div>
-
   <header class="site-header">
     <p class="eyebrow">Free guide for independent generator service shops</p>
   </header>
-
   <main id="main">
-    <section aria-labelledby="ty-preview-title" id="preview-thank-you" data-testid="preview-thank-you">
+    <section aria-labelledby="ty-title">
       <div class="thank-you-panel">
-        <h1 id="ty-preview-title">Preview complete — delivery not enabled yet</h1>
-        <p class="lead">Thanks for testing the form. In preview mode we do <strong>not</strong> collect your email and we do <strong>not</strong> fulfill a PDF download. Production needs a configured backend, a verified deletion contact, and a controlled website download that keeps the Drive file owner-only.</p>
-        <p><a class="btn btn-secondary" href="index.html">Back to landing page</a></p>
-      </div>
-    </section>
-
-    <section aria-labelledby="ty-ready-title" id="production-thank-you" data-testid="production-thank-you" hidden>
-      <div class="thank-you-panel">
-        <h1 id="ty-ready-title">Your Customer Recovery guide is ready</h1>
-        <p class="lead">Download the guide now and save a copy for your shop. This page does <strong>not</strong> email the PDF.</p>
-        <button type="button" class="btn btn-primary" id="download-btn" data-testid="download-btn">
-          Download the Customer Recovery guide (PDF)
-        </button>
-        <p class="download-note" id="download-note">
-          This download token lasts 15 minutes. Anyone who has it can download the guide until it expires. It does not prove you control the inbox. It is not a link to the private Drive file. The guide is not emailed.
-        </p>
-        <p class="download-note" id="expiry-note"></p>
-        <aside class="soft-prompt" aria-labelledby="soft-prompt-title" data-testid="soft-prompt">
+        <h1 id="ty-title">Guide email is not confirmed</h1>
+        <p class="lead">SendFox is the intended sender of the Customer Recovery guide message. This page does not show a provider receipt, so it does not say the message was delivered and it does not say a PDF was attached.</p>
+        <p>If a reviewed form, a verified sender, and a public guide link are later connected, SendFox may email a link to the guide after its own confirmation step. None of those pieces are configured on this site.</p>
+        <aside class="soft-prompt" aria-labelledby="soft-prompt-title">
           <h2 id="soft-prompt-title">Want help putting this into practice? Choose guided setup or done-for-you implementation.</h2>
-          <p>This form does not sign you up for a paid service.</p>
+          <p>This page does not sign you up for a paid service.</p>
           <p>No payment form, no “Buy now,” and no booking or waitlist link is offered here.</p>
         </aside>
-      </div>
-    </section>
-
-    <section aria-labelledby="ty-inactive-title" id="grant-inactive" data-testid="grant-inactive" hidden>
-      <div class="thank-you-panel">
-        <h1 id="ty-inactive-title">No download is active in this browser</h1>
-        <p class="lead" id="inactive-detail">This page does not email the PDF and does not keep a public copy. A download appears here after the server stores a signup and returns a short-lived token to this tab.</p>
         <p><a class="btn btn-secondary" href="index.html">Back to the guide form</a></p>
       </div>
     </section>
   </main>
-
   <footer class="site-footer">
     <p>Independent generator service resources · © Roger Navarrette</p>
-    <p data-preview-only>Privacy details must be approved and linked before production collection is enabled.</p>
     <p><a href="privacy.html">Privacy notice</a></p>
   </footer>
-
-  <script src="js/config.js"></script>
-  <script src="js/validators.js"></script>
-  <script src="js/thank-you.js"></script>
 </body>
 </html>

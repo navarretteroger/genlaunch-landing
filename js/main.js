@@ -1,14 +1,11 @@
 (function () {
   "use strict";
 
-  var config = window.GENLAUNCH_CONFIG || {};
-  var V = window.GenlaunchValidators;
-  var endpoint = V.captureEndpoint(config);
-
-  function $(sel) { return document.querySelector(sel); }
+  var fox = window.GenlaunchSendFox;
+  var config = window.GENLAUNCH_SENDFOX || {};
+  var embed = fox.assess(config);
 
   function setError(input, errorEl, message) {
-    if (!input || !errorEl) return;
     if (message) {
       errorEl.textContent = message;
       errorEl.classList.add("is-visible");
@@ -20,118 +17,57 @@
     }
   }
 
-  function showStatus(el, message, kind) {
-    if (!el) return;
-    el.hidden = false;
-    el.textContent = message;
-    el.classList.remove("is-preview", "is-error");
-    if (kind) el.classList.add(kind);
-  }
-
-  function applyMode() {
-    document.body.setAttribute("data-delivery-mode", endpoint ? "production" : "preview");
-    if (!endpoint) return;
-    document.querySelectorAll("[data-preview-only]").forEach(function (el) {
-      el.hidden = true;
-    });
-    var productionHelper = $("#form-helper-production");
-    if (productionHelper) productionHelper.hidden = false;
-  }
-
-  function initForm() {
-    var form = $("#guide-form");
-    if (!form || !V) return;
-    var emailInput = $("#work-email");
-    var errorEl = $("#email-error");
-    var statusEl = $("#form-status");
-    var submitBtn = form.querySelector('[type="submit"]');
-    var controller = V.createSubmitController({ createKey: V.createIdempotencyKey });
-
-    emailInput.addEventListener("input", function () {
-      setError(emailInput, errorEl, "");
-      if (!controller.isInFlight()) controller.rotateKey();
-      if (statusEl) {
-        statusEl.hidden = true;
-        statusEl.textContent = "";
-      }
-    });
-
-    form.addEventListener("submit", function (ev) {
-      ev.preventDefault();
-      var checked = V.validateCaptureFields({ email: emailInput.value });
-      if (!checked.ok) {
-        setError(emailInput, errorEl, checked.errors.email);
-        emailInput.focus();
-        return;
-      }
-      setError(emailInput, errorEl, "");
-      var gate = controller.begin();
-      if (!gate.ok) {
-        showStatus(statusEl, gate.message, "is-error");
-        return;
-      }
-      if (!endpoint) {
-        controller.fail();
-        showStatus(statusEl, V.PREVIEW_SUBMIT, "is-preview");
-        return;
-      }
-
-      if (submitBtn) submitBtn.disabled = true;
-      fetch(endpoint + "/v1/signups", {
-        method: "POST",
-        mode: "cors",
-        credentials: "omit",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          "Idempotency-Key": gate.idempotencyKey,
-        },
-        body: JSON.stringify({
-          email: String(emailInput.value || "").trim(),
-          privacyNoticeVersion: config.PRIVACY_NOTICE_VERSION,
-          company_website: (document.getElementById("company-website") || {}).value || "",
-        }),
-      }).then(function (res) {
-        return res.json().catch(function () { return {}; }).then(function (body) {
-          return { status: res.status, body: body };
-        });
-      }).then(function (result) {
-        var interpreted = V.interpretSignupResponse(result.status, result.body);
-        if (!interpreted.ok) {
-          controller.fail();
-          if (interpreted.rotateKey) controller.rotateKey();
-          if (submitBtn) submitBtn.disabled = false;
-          showStatus(statusEl, interpreted.message, "is-error");
-          return;
-        }
-        var record = V.buildSessionRecord(endpoint, result.body);
-        sessionStorage.setItem(V.SESSION_KEY, JSON.stringify(record));
-        controller.succeed();
-        window.location.href = "thank-you.html";
-      }).catch(function () {
-        controller.fail();
-        if (submitBtn) submitBtn.disabled = false;
-        showStatus(statusEl, V.SAVE_FAILED, "is-error");
-      });
-    });
-  }
-
-  function initSticky() {
-    var sticky = document.querySelector(".sticky-cta");
-    var heroCta = document.querySelector(".hero [data-cta='primary']");
-    if (!sticky || !heroCta || !window.IntersectionObserver) return;
-    var observer = new IntersectionObserver(function (entries) {
-      var visible = entries[0] && entries[0].isIntersecting;
-      sticky.classList.toggle("is-active", !visible);
-      document.body.classList.toggle("has-sticky", !visible);
-    }, { threshold: 0.15 });
-    observer.observe(heroCta);
-  }
-
   function boot() {
-    applyMode();
-    initForm();
-    initSticky();
+    var form = document.getElementById("guide-form");
+    var input = document.getElementById("work-email");
+    var errorEl = document.getElementById("email-error");
+    var status = document.getElementById("form-status");
+    if (!form || !input) return;
+    if (embed.ok) {
+      form.action = embed.action;
+      form.method = "post";
+      form.classList.add(embed.formClass);
+      form.setAttribute("data-async", "true");
+      form.setAttribute("data-recaptcha", "false");
+      var script = document.createElement("script");
+      script.src = embed.scriptSrc;
+      script.charset = "utf-8";
+      document.body.appendChild(script);
+    }
+    form.addEventListener("submit", function (ev) {
+      var value = input.value;
+      if (!String(value || "").trim()) {
+        ev.preventDefault();
+        setError(input, errorEl, fox.EMPTY_EMAIL);
+        input.focus();
+        return;
+      }
+      if (!fox.isValidEmail(value)) {
+        ev.preventDefault();
+        setError(input, errorEl, fox.INVALID_EMAIL);
+        input.focus();
+        return;
+      }
+      setError(input, errorEl, "");
+      if (!embed.ok) {
+        ev.preventDefault();
+        status.hidden = false;
+        status.classList.add("is-preview");
+        status.textContent = fox.NOT_READY;
+        return;
+      }
+    });
+
+    var sticky = document.querySelector(".sticky-cta");
+    var heroCta = document.querySelector(".hero [data-cta]");
+    if (sticky && heroCta && "IntersectionObserver" in window) {
+      var observer = new IntersectionObserver(function (entries) {
+        var visible = entries[0] && entries[0].isIntersecting;
+        sticky.classList.toggle("is-active", !visible);
+        document.body.classList.toggle("has-sticky", !visible);
+      });
+      observer.observe(heroCta);
+    }
   }
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);

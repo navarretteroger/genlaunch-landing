@@ -1,13 +1,11 @@
 {
   "name": "genlaunch-landing",
   "private": true,
-  "description": "Customer Recovery landing page and owner-OAuth capture/download API. Static files are served by GitHub Pages. The API is a separate Node process.",
+  "description": "Unpublished static Customer Recovery landing page. SendFox embed stays off until a reviewed current-offer form exists.",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "start": "node server/src/index.js",
-    "test": "node --test server/test/*.test.js",
-    "oauth-exchange": "node server/scripts/owner-oauth-setup.js exchange"
+    "test": "node --test tests/*.test.js"
   }
 }

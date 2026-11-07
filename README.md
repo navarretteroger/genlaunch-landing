@@ -1,44 +1,31 @@
 # GenLaunch landing — Customer Recovery guide
 
-Static GitHub Pages site plus a small Node API. The page offers the free Customer Recovery guide to service-only independent generator shops. The API, once configured, validates an email, appends a row to a private Google Sheet, and streams the private canonical PDF through a short-lived bearer token.
+Unpublished static pages for GitHub Pages. The signup control is a SendFox embed slot. It is **not connected**. This site does not send email, and it does not publish the guide file.
 
-The Pages site in this repo stays in **preview** until `js/config.js` is changed in a reviewed update. Preview does not store the email and does not download a PDF.
+Live site: https://navarretteroger.github.io/genlaunch-landing/ still serves `main` until a person merges. This branch is not merged.
 
-Live site today: https://navarretteroger.github.io/genlaunch-landing/ (GitHub Pages, `main`, repository root). This branch does not change that site until a person merges it. Merging while `DELIVERY_MODE` is `preview` still does not capture email.
+Earlier Google OAuth work remains in git history. That history did not revoke any Google account grant.
 
-## What is not claimed
+The pages still use the earlier quiet layout: warm white `#F7F6F3`, forest green `#1F4B3A`, Inter or the system font, and a narrow column. Roger’s later cinematic handoff (video hero, modals, bold headings, purple call to action) is a separate design follow-up. It is not implemented here.
 
-- Google OAuth is **not** configured here. No refresh token, client secret, or signing secret is in the repo.
-- Tests use in-process mocks. They do **not** write the signup sheet and do **not** download the private PDF.
-- The PDF and the sheet stay owner-only (`shared: false`) on the existing account `navarretteroger@gmail.com`. This code does not grant permissions and does not use a service account.
-- Outbound email is off. Stripe and Skool are not part of this page.
+## What is blocked
 
-Setup that is still required is listed in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). A filled acceptance check is in [QA-checklist-filled.md](QA-checklist-filled.md).
+Roger approves activation. These inputs are missing, and the page stays honest until they exist:
 
-## Run the page locally
+1. A SendFox form and list created for **this** Customer Recovery guide. Do not reuse the Lease Newsletter form or the older Generator Readiness for Healthcare Clinics page.
+2. The vendor embed snippet from that form’s Get embed code screen, or its legacy form id and public id. No API key is required for the public embed, and none belongs in this repo.
+3. A verified sending domain and the confirmation step SendFox will actually use.
+4. An approved public guide URL or other delivery method SendFox is allowed to email. The guide file is still owner-only. This repo does not link it.
+5. A reviewed privacy notice and footer. No mailing address is copied here.
+6. Roger’s explicit decision to turn the form on. `js/config.js` has `OFFER_REVIEWED: false`.
 
-```bash
-python3 -m http.server 8765
-# open http://127.0.0.1:8765/
-```
-
-Submit a valid email. The status line must say nothing was stored and no PDF was fulfilled. Opening `thank-you.html` directly shows the preview thank-you, not a download.
-
-## Run the API locally
+## Local check
 
 ```bash
 npm test
-npm start
+python3 -m http.server 8765
 ```
 
-`npm start` listens on port 8080. Until the host has the owner refresh token, `GRANT_SIGNING_SECRET`, a verified deletion contact, and a writable idempotency directory, `POST /v1/signups` returns the preview message and does not issue a download token. `/healthz` does not treat saved config as proof that Google accepted the token. Run `node server/scripts/probe.js` for that check. It does not download the PDF.
+Open `http://127.0.0.1:8765/`. Submitting an email must say nothing was sent.
 
-## Layout
-
-| Path | Role |
-| --- | --- |
-| `index.html`, `thank-you.html`, `privacy.html` | Pages files. Relative URLs work under `/genlaunch-landing/`. |
-| `js/config.js` | Public switch. Preview and `CAPTURE_API_BASE: null` by default. |
-| `server/` | Portable Node API. Zero npm dependencies. |
-| `server/scripts/owner-oauth-setup.js` | Local consent helper for the existing owner account. |
-| `docs/DEPLOYMENT.md` | Runbook and remaining inputs. |
+Official embed notes: [create a form](https://help.sendfox.com/article/306-how-to-create-an-embeddable-html-form) and [legacy HTML](https://help.sendfox.com/article/302-how-can-i-format-my-sendfox-html-form). The legacy form posts to `https://sendfox.com/form/{formId}/{publicId}` and loads `https://sendfox.com/js/form.js`. This copy does not load that script.
