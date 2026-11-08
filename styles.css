@@ -494,6 +494,14 @@ body.privacy-doc { background: var(--light-bg); color: var(--light-text); }
 .privacy-article ul { margin: 0.75rem 0 0; padding-left: 1.2rem; }
 .privacy-article li { margin: 0.45rem 0; }
 .privacy-article a { color: var(--brand); font-weight: 700; }
+.home-main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 4rem var(--gutter) 5rem;
+}
+.home-main h1 { font-size: clamp(2.5rem, 6vw, 4.25rem); margin: 0; }
+.home-main p { margin-top: 1rem; color: var(--text-muted); }
+.home-main .btn { margin-top: 0.5rem; }
 .privacy-gap {
   margin-top: 1rem;
   padding: 0.9rem 1rem;
